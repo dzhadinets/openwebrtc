@@ -139,7 +139,7 @@ static void got_sources(GList *sources, gpointer user_data)
 
             owr_bus_add_message_origin(bus, OWR_MESSAGE_ORIGIN(source));
 
-            payload = owr_video_payload_new(OWR_CODEC_TYPE_VP8, 103, 90000, TRUE, FALSE);
+            payload = owr_video_payload_new(OWR_CODEC_TYPE_H264, 103, 90000, TRUE, FALSE);
             g_object_set(payload, "width", 1280, "height", 720, "framerate", 30.0, NULL);
             g_object_set(payload, "rtx-payload-type", 123, NULL);
 
@@ -320,7 +320,7 @@ int main(int argc, char **argv)
     if (!disable_video) {
         g_signal_connect(recv_session_video, "on-incoming-source", G_CALLBACK(got_remote_source), NULL);
 
-        receive_payload = owr_video_payload_new(OWR_CODEC_TYPE_VP8, 103, 90000, TRUE, FALSE);
+        receive_payload = owr_video_payload_new(OWR_CODEC_TYPE_H264, 103, 90000, TRUE, FALSE);
         g_object_set(receive_payload, "rtx-payload-type", 123, NULL);
 
         owr_media_session_add_receive_payload(recv_session_video, receive_payload);
