@@ -273,7 +273,7 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
 {
     OwrMediaType media_type;
     GstElement *source_pipeline, *tee;
-    GstElement *source_bin, *source = NULL, *queue_pre, *queue_post, *first;
+    GstElement *source_bin, *source = NULL, *queue_pre, *queue_post, *first = NULL;
     GstElement *capsfilter;
     GstElement *sink, *sink_queue, *sink_bin;
     GstPad *bin_pad = NULL, *srcpad, *sinkpad;
@@ -325,7 +325,9 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
         }
     case OWR_MEDIA_TYPE_VIDEO:
         {
+#if !TARGET_RPI
         GstElement *videoscale, *videoconvert;
+#endif
         GstPad *tee_sinkpad;
         GstCaps *src_caps;
 
@@ -336,12 +338,16 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
         gst_pad_add_probe(srcpad, GST_PAD_PROBE_TYPE_BUFFER, drop_gap_buffers, NULL, NULL);
         gst_object_unref(srcpad);
 
-        g_object_set(capsfilter, "caps", caps, NULL);
-
         /* Let's see if we have specific caps from the source, and whether
          * they're compatible */
         tee_sinkpad = gst_element_get_static_pad(tee, "sink");
         src_caps = gst_pad_peer_query_caps(tee_sinkpad, caps);
+
+#if TARGET_RPI
+        gst_bin_add(GST_BIN(source_bin), queue_post);
+        first = queue_post;
+#else
+        g_object_set(capsfilter, "caps", caps, NULL);
 
         if (!gst_caps_is_empty(src_caps)) {
             /* We have the caps we want, don't bother with conversion */
@@ -362,6 +368,7 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
             LINK_ELEMENTS(queue_pre, videoscale);
             first = queue_pre;
         }
+#endif
 
         gst_caps_unref(src_caps);
         gst_object_unref(tee_sinkpad);
@@ -407,7 +414,10 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
     gst_element_add_pad(source_bin, bin_pad);
 
     gst_bin_add(GST_BIN(source_bin), source);
-    LINK_ELEMENTS(source, first);
+    if (first)
+        LINK_ELEMENTS(source, first);
+
+    GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(source_bin), GST_DEBUG_GRAPH_SHOW_ALL, "source_bin");
 
 done:
 

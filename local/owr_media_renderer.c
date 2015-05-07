@@ -324,12 +324,7 @@ static void maybe_start_renderer(OwrMediaRenderer *renderer)
 
     g_signal_connect(sinkpad, "notify::caps", G_CALLBACK(on_caps), renderer);
 
-#if 1
-    caps = gst_caps_from_string("video/x-h264, profile = { \"baseline\", \"constrained-baseline\" }, width = 1280, height = 720, framerate = 30/1");
-    gst_caps_append(caps, OWR_MEDIA_RENDERER_GET_CLASS(renderer)->get_caps(renderer));
-#else
     caps = OWR_MEDIA_RENDERER_GET_CLASS(renderer)->get_caps(renderer);
-#endif
     src = _owr_media_source_request_source(priv->source, caps);
     gst_caps_unref(caps);
     g_assert(src);
@@ -348,6 +343,12 @@ static void maybe_start_renderer(OwrMediaRenderer *renderer)
         GST_ERROR("Failed to link source with renderer (%d)", pad_link_return);
         return;
     }
+
+    if (renderer->priv->media_type == OWR_MEDIA_TYPE_VIDEO)
+        g_object_notify(G_OBJECT(renderer), "rotation");
+
+    g_object_notify(G_OBJECT(renderer), "disabled");
+
     gst_element_set_state(priv->pipeline, GST_STATE_PLAYING);
     OWR_POST_EVENT(renderer, RENDERER_STARTED, NULL);
 }
@@ -472,6 +473,11 @@ void _owr_media_renderer_set_sink(OwrMediaRenderer *renderer, gpointer sink_ptr)
     maybe_start_renderer(renderer);
 
     g_mutex_unlock(&priv->media_renderer_lock);
+}
+
+OwrMediaSource* _owr_media_renderer_get_source(OwrMediaRenderer *renderer)
+{
+    return renderer->priv->source;
 }
 
 gchar * owr_media_renderer_get_dot_data(OwrMediaRenderer *renderer)

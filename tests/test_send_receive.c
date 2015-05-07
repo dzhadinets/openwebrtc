@@ -140,7 +140,7 @@ static void got_sources(GList *sources, gpointer user_data)
             owr_bus_add_message_origin(bus, OWR_MESSAGE_ORIGIN(source));
 
             payload = owr_video_payload_new(OWR_CODEC_TYPE_H264, 103, 90000, TRUE, FALSE);
-            g_object_set(payload, "width", 1280, "height", 720, "framerate", 30.0, NULL);
+            g_object_set(payload, "width", 1920, "height", 1080, "framerate", 30.0, NULL);
             g_object_set(payload, "rtx-payload-type", 123, NULL);
 
             owr_media_session_set_send_payload(send_session_video, payload);
@@ -149,16 +149,20 @@ static void got_sources(GList *sources, gpointer user_data)
 
             owr_transport_agent_add_session(send_transport_agent, OWR_SESSION(send_session_video));
 
+            if (!g_getenv("DISABLE_SELF_VIEW")) {
             g_print("Displaying self-view\n");
 
             renderer = owr_video_renderer_new(NULL);
             g_assert(renderer);
+
             owr_bus_add_message_origin(bus, OWR_MESSAGE_ORIGIN(renderer));
 
-            g_object_set(renderer, "width", 1280, "height", 720, "max-framerate", 30.0, NULL);
+            g_object_set(renderer, "width", 1920, "height", 1080, "max-framerate", 30.0, NULL);
             owr_media_renderer_set_source(OWR_MEDIA_RENDERER(renderer), source);
             video_renderer = OWR_MEDIA_RENDERER(renderer);
+            }
             video_source = g_object_ref(source);
+            
         } else if (!disable_audio && !have_audio && media_type == OWR_MEDIA_TYPE_AUDIO && source_type == OWR_SOURCE_TYPE_CAPTURE) {
             OwrPayload *payload;
 
@@ -343,7 +347,7 @@ int main(int argc, char **argv)
     owr_get_capture_sources((!disable_video ? OWR_MEDIA_TYPE_VIDEO : 0) | (!disable_audio ? OWR_MEDIA_TYPE_AUDIO : 0),
         got_sources, NULL);
 
-    g_timeout_add_seconds(10, (GSourceFunc)dump_cb, NULL);
+    g_timeout_add_seconds(15, (GSourceFunc)dump_cb, NULL);
 
     owr_run();
 
