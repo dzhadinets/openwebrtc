@@ -287,8 +287,14 @@ static void owr_payload_init(OwrPayload *payload)
 /* Private methods */
 
 
+#if TARGET_RPI
+static const gchar *OwrCodecTypeEncoderElementName[] = {"none", "mulawenc", "alawenc", "opusenc", "omxh264enc", "omxvp8enc"};
+static const gchar *OwrCodecTypeDecoderElementName[] = {"none", "mulawdec", "alawdec", "opusdec", "omxh264dec", "omxvp8dec"};
+#else
 static const gchar *OwrCodecTypeEncoderElementName[] = {"none", "mulawenc", "alawenc", "opusenc", "openh264enc", "vp8enc"};
 static const gchar *OwrCodecTypeDecoderElementName[] = {"none", "mulawdec", "alawdec", "opusdec", "openh264dec", "vp8dec"};
+#endif
+
 static const gchar *OwrCodecTypeParserElementName[] = {"none", "none", "none", "none", "h264parse", "none"};
 static const gchar *OwrCodecTypePayElementName[] = {"none", "rtppcmupay", "rtppcmapay", "rtpopuspay", "rtph264pay", "rtpvp8pay"};
 static const gchar *OwrCodecTypeDepayElementName[] = {"none", "rtppcmudepay", "rtppcmadepay", "rtpopusdepay", "rtph264depay", "rtpvp8depay"};
@@ -402,6 +408,7 @@ GstElement * _owr_payload_create_encoder(OwrPayload *payload)
 #endif
                 "max-keyframe-interval", G_MAXINT,
                 NULL);
+        } else if (!strcmp(factory_name, "omxh264enc")) {
         } else {
             /* Assume bits/s instead of kbit/s */
             g_object_bind_property(payload, "bitrate", encoder, "bitrate", G_BINDING_SYNC_CREATE);
@@ -628,16 +635,34 @@ GstCaps * _owr_payload_create_rtp_caps(OwrPayload *payload)
     return caps;
 }
 
-
-GstCaps * _owr_payload_create_raw_caps(OwrPayload *payload)
+static void set_video_params(GstCaps *caps, OwrPayload *payload)
 {
-    OwrPayloadPrivate *priv;
-    OwrMediaType media_type;
-    GstCaps *caps = NULL;
-    guint channels = 0;
     guint width = 0, height = 0;
     gdouble framerate = 0.0;
     gint fps_n = 0, fps_d = 1;
+
+    if (OWR_IS_VIDEO_PAYLOAD(payload)) {
+        g_object_get(OWR_VIDEO_PAYLOAD(payload),
+            "width", &width,
+            "height", &height,
+            "framerate", &framerate,
+            NULL);
+    }
+
+    gst_caps_set_simple(caps, "width", G_TYPE_INT, width > 0 ? width : LIMITED_WIDTH, NULL);
+    gst_caps_set_simple(caps, "height", G_TYPE_INT, height > 0 ? height : LIMITED_HEIGHT, NULL);
+
+    framerate = framerate > 0.0 ? framerate : LIMITED_FRAMERATE;
+    gst_util_double_to_fraction(framerate, &fps_n, &fps_d);
+    gst_caps_set_simple(caps, "framerate", GST_TYPE_FRACTION, fps_n, fps_d, NULL);
+}
+
+GstCaps * _owr_payload_create_source_caps(OwrPayload *payload)
+{
+    OwrPayloadPrivate *priv;
+    OwrMediaType media_type;
+    GstCaps *caps = NULL, *tmp;
+    guint channels = 0;
 
     g_return_val_if_fail(payload, NULL);
     priv = payload->priv;
@@ -659,20 +684,20 @@ GstCaps * _owr_payload_create_raw_caps(OwrPayload *payload)
         break;
 
     case OWR_MEDIA_TYPE_VIDEO:
-        if (OWR_IS_VIDEO_PAYLOAD(payload)) {
-            g_object_get(OWR_VIDEO_PAYLOAD(payload),
-                "width", &width,
-                "height", &height,
-                "framerate", &framerate,
-                NULL);
-        }
-        caps = gst_caps_new_empty_simple("video/x-raw");
-        gst_caps_set_simple(caps, "width", G_TYPE_INT, width > 0 ? width : LIMITED_WIDTH, NULL);
-        gst_caps_set_simple(caps, "height", G_TYPE_INT, height > 0 ? height : LIMITED_HEIGHT, NULL);
+        caps = gst_caps_new_empty();
 
-        framerate = framerate > 0.0 ? framerate : LIMITED_FRAMERATE;
-        gst_util_double_to_fraction(framerate, &fps_n, &fps_d);
-        gst_caps_set_simple(caps, "framerate", GST_TYPE_FRACTION, fps_n, fps_d, NULL);
+        /* For cameras that may be able to give us embedded video */
+        tmp = _owr_payload_create_encoded_caps(payload);
+        if (tmp) {
+            set_video_params(tmp, payload);
+            gst_caps_append(caps, tmp);
+        }
+
+        tmp = gst_caps_new_empty_simple("video/x-raw");
+        set_video_params(tmp, payload);
+
+        gst_caps_append(caps, tmp);
+
         break;
     default:
         g_return_val_if_reached(NULL);
@@ -685,7 +710,7 @@ GstCaps * _owr_payload_create_raw_caps(OwrPayload *payload)
 
 GstCaps * _owr_payload_create_encoded_caps(OwrPayload *payload)
 {
-    GstCaps *caps = NULL;
+    GstCaps *caps;
 
     g_return_val_if_fail(OWR_IS_PAYLOAD(payload), NULL);
 
@@ -694,14 +719,17 @@ GstCaps * _owr_payload_create_encoded_caps(OwrPayload *payload)
         caps = gst_caps_new_simple("video/x-h264",
             "profile", G_TYPE_STRING, "baseline",
             NULL);
+#if !TARGET_RPI
         caps = gst_caps_merge_structure(caps, gst_structure_new("video/x-h264",
             "profile", G_TYPE_STRING, "constrained-baseline", NULL));
+#endif
         break;
     case OWR_CODEC_TYPE_VP8:
         caps = gst_caps_new_empty_simple("video/x-vp8");
         break;
     default:
-        caps = gst_caps_new_any();
+        caps = NULL;
+        break;
     }
 
     return caps;

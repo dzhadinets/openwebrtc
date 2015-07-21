@@ -66,8 +66,11 @@ GST_DEBUG_CATEGORY_EXTERN(_owrlocalmediasource_debug);
 
 #elif defined(__linux__)
 #define AUDIO_SRC  "pulsesrc"
+#if TARGET_RPI
+#define VIDEO_SRC  "rpicamsrc"
+#else
 #define VIDEO_SRC  "v4l2src"
-
+#endif /* TARGET_RPI */
 #else
 #define AUDIO_SRC  "audiotestsrc"
 #define VIDEO_SRC  "videotestsrc"
@@ -563,9 +566,13 @@ static GstElement *owr_local_media_source_request_source(OwrMediaSource *media_s
 #elif defined(__ANDROID__)
                     g_object_set(source, "cam-index", priv->device_index, NULL);
 #elif defined(__linux__)
+#if !defined(TARGET_RPI) || !TARGET_RPI
                     tmp = g_strdup_printf("/dev/video%d", priv->device_index);
                     g_object_set(source, "device", tmp, NULL);
                     g_free(tmp);
+#else
+                    g_object_set(source, "preview", FALSE, NULL);
+#endif
 #endif
                 }
                 break;
@@ -649,6 +656,14 @@ static GstElement *owr_local_media_source_request_source(OwrMediaSource *media_s
             gst_caps_unref(source_caps);
             gst_bin_add(GST_BIN(source_pipeline), capsfilter);
 
+            /* In case we have compressed output from the source */
+            if (!source_process) {
+                /* Only try this if we didn't have to insert a videoscale already */
+                CREATE_ELEMENT(source_process, "singledecodebin", "video-source-parsebin");
+                g_object_set(source_process, "parse-only", TRUE, NULL);
+                gst_bin_add(GST_BIN(source_pipeline), source_process);
+            }
+
             break;
         }
         case OWR_MEDIA_TYPE_UNKNOWN:
@@ -690,11 +705,21 @@ static GstElement *owr_local_media_source_request_source(OwrMediaSource *media_s
             GST_ERROR_OBJECT(media_source, "Failed to create source element!");
 
         if (capsfilter) {
+#if TARGET_RPI
+            /* Put the capsfilter just after the source element */
+            if (source_process) {
+                LINK_ELEMENTS(source_process, tee);
+                LINK_ELEMENTS(capsfilter, source_process);
+                LINK_ELEMENTS(source, capsfilter);
+            }
+#else
             LINK_ELEMENTS(capsfilter, tee);
             if (source_process) {
                 LINK_ELEMENTS(source_process, capsfilter);
                 LINK_ELEMENTS(source, source_process);
-            } else
+            }
+#endif
+            else
                 LINK_ELEMENTS(source, capsfilter);
         } else if (source_process) {
             LINK_ELEMENTS(source_process, tee);

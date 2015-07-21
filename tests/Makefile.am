@@ -21,8 +21,7 @@ bin_PROGRAMS = \
     test-send-receive \
     test-data-channel \
     test-init \
-    test-bus \
-    test-client
+    test-bus
 
 if OWR_GST
 AM_CPPFLAGS += \
@@ -42,6 +41,27 @@ test_gst_io_LDADD = \
     $(GLIB_LIBS) \
     $(top_builddir)/owr/libopenwebrtc.la \
     $(top_builddir)/gst/libopenwebrtc_gst.la
+endif
+
+if HAVE_JSON_GLIB
+bin_PROGRAMS += \
+    test-client
+
+test_client_SOURCES = test_client.c
+
+test_client_CFLAGS = \
+    $(AM_CFLAGS) \
+    $(JSON_GLIB_CFLAGS) \
+    $(LIBSOUP_CFLAGS) \
+    -I$(top_srcdir)/local \
+    -I$(top_srcdir)/transport \
+    -I$(top_srcdir)/owr
+
+test_client_LDADD = \
+    $(JSON_GLIB_LIBS) \
+    $(LIBSOUP_LIBS) \
+    $(GLIB_LIBS) \
+    $(top_builddir)/owr/libopenwebrtc.la
 endif
 
 list_devices_SOURCES = list_devices.c
@@ -109,22 +129,6 @@ test_bus_CFLAGS = \
     -I$(top_srcdir)/owr
 
 test_bus_LDADD = \
-    $(GLIB_LIBS) \
-    $(top_builddir)/owr/libopenwebrtc.la
-
-test_client_SOURCES = test_client.c
-
-test_client_CFLAGS = \
-    $(AM_CFLAGS) \
-    $(JSON_GLIB_CFLAGS) \
-    $(LIBSOUP_CFLAGS) \
-    -I$(top_srcdir)/local \
-    -I$(top_srcdir)/transport \
-    -I$(top_srcdir)/owr
-
-test_client_LDADD = \
-    $(JSON_GLIB_LIBS) \
-    $(LIBSOUP_LIBS) \
     $(GLIB_LIBS) \
     $(top_builddir)/owr/libopenwebrtc.la
 

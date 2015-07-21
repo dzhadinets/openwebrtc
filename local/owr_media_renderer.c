@@ -310,6 +310,7 @@ static void maybe_start_renderer(OwrMediaRenderer *renderer)
     OwrMediaRendererPrivate *priv;
     GstPad *sinkpad, *srcpad;
     GstElement *src;
+    GstElement *decoder;
     GstCaps *caps;
     GstPadLinkReturn pad_link_return;
 
@@ -327,12 +328,14 @@ static void maybe_start_renderer(OwrMediaRenderer *renderer)
     src = _owr_media_source_request_source(priv->source, caps);
     gst_caps_unref(caps);
     g_assert(src);
-    srcpad = gst_element_get_static_pad(src, "src");
-    g_assert(srcpad);
+    /* The source might be providing compressed output */
+    decoder = gst_element_factory_make("singledecodebin", NULL);
+    gst_bin_add_many(GST_BIN(priv->pipeline), decoder, src, NULL);
+    gst_element_link(src, decoder);
+    srcpad = gst_element_get_static_pad(decoder, "src");
     priv->src = src;
 
     /* The sink is always inside the bin already */
-    gst_bin_add_many(GST_BIN(priv->pipeline), priv->src, NULL);
     pad_link_return = gst_pad_link(srcpad, sinkpad);
     gst_object_unref(sinkpad);
     gst_object_unref(srcpad);
@@ -340,6 +343,12 @@ static void maybe_start_renderer(OwrMediaRenderer *renderer)
         GST_ERROR("Failed to link source with renderer (%d)", pad_link_return);
         return;
     }
+
+    if (renderer->priv->media_type == OWR_MEDIA_TYPE_VIDEO)
+        g_object_notify(G_OBJECT(renderer), "rotation");
+
+    g_object_notify(G_OBJECT(renderer), "disabled");
+
     gst_element_set_state(priv->pipeline, GST_STATE_PLAYING);
     OWR_POST_EVENT(renderer, RENDERER_STARTED, NULL);
 }
@@ -464,6 +473,11 @@ void _owr_media_renderer_set_sink(OwrMediaRenderer *renderer, gpointer sink_ptr)
     maybe_start_renderer(renderer);
 
     g_mutex_unlock(&priv->media_renderer_lock);
+}
+
+OwrMediaSource* _owr_media_renderer_get_source(OwrMediaRenderer *renderer)
+{
+    return renderer->priv->source;
 }
 
 gchar * owr_media_renderer_get_dot_data(OwrMediaRenderer *renderer)
