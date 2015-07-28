@@ -376,7 +376,7 @@ static gboolean enumerate_video_source_devices(GClosure *callback)
     GList *sources = NULL;
     GError *error = NULL;
     GDir *dev_dir;
-    const gchar *filename
+    const gchar *filename;
     
     dev_dir = g_dir_open("/dev", 0, &error);
 
