@@ -260,83 +260,34 @@ OwrVideoRenderer *owr_video_renderer_new(const gchar *tag)
     if (!gst_element_link(a, b)) \
         GST_ERROR("Failed to link " #a " -> " #b);
 
-static void renderer_disabled(OwrMediaRenderer *renderer, GParamSpec *pspec, GstElement *renderer_bin)
+static void renderer_disabled(OwrMediaRenderer *renderer, GParamSpec *pspec, GstElement *balance)
 {
     gboolean disabled = FALSE;
-    GstColorBalance* color_balance = NULL;
-    GstElement* balance_element = NULL;
 
     g_return_if_fail(OWR_IS_MEDIA_RENDERER(renderer));
     g_return_if_fail(G_IS_PARAM_SPEC(pspec) || !pspec);
-
-    balance_element = gst_bin_get_by_interface(GST_BIN(renderer_bin), GST_TYPE_COLOR_BALANCE);
-    if (!balance_element) {
-        OwrMediaSource* media_source = _owr_media_renderer_get_source(renderer);
-        GstElement* src_bin = _owr_media_source_get_source_bin(media_source);
-        balance_element = gst_bin_get_by_interface(GST_BIN(src_bin), GST_TYPE_COLOR_BALANCE);
-    }
-
-    if (balance_element)
-        color_balance = GST_COLOR_BALANCE(balance_element);
-
-    if (!GST_IS_COLOR_BALANCE(color_balance))
-        return;
+    g_return_if_fail(GST_IS_ELEMENT(balance));
 
     g_object_get(renderer, "disabled", &disabled, NULL);
-
-    const GList* controls = gst_color_balance_list_channels(color_balance);
-    gint index = 0;
-    for (const GList* item = controls; item != NULL; item = item->next, ++index) {
-        GstColorBalanceChannel* channel = item->data;
-        gint current_value = gst_color_balance_get_value(color_balance, channel);
-        gint new_value = current_value;
-        if (g_str_equal(channel->label, "SATURATION") || g_str_equal(channel->label, "BRIGHTNESS"))
-            new_value = disabled ? channel->min_value : ((channel->min_value + channel->max_value) / 2);
-        gst_color_balance_set_value(color_balance, channel, new_value);
-    }
-
-    gst_object_unref(balance_element);
+    g_object_set(balance, "saturation", (gdouble)!disabled, "brightness", (gdouble)-disabled, NULL);
 }
 
 static void update_flip_method(OwrMediaRenderer *renderer, GParamSpec *pspec, GstElement *flip)
 {
     guint rotation = 0;
     gboolean mirror = FALSE;
+    gint flip_method;
 
     g_return_if_fail(OWR_IS_MEDIA_RENDERER(renderer));
     g_return_if_fail(G_IS_PARAM_SPEC(pspec) || !pspec);
+    g_return_if_fail(GST_IS_ELEMENT(flip));
 
     g_object_get(renderer, "rotation", &rotation, "mirror", &mirror, NULL);
-
-    if (flip) {
-        gint flip_method = _owr_rotation_and_mirror_to_video_flip_method(rotation, mirror);
-        g_object_set(flip, "method", flip_method, NULL);
-    } else {
-#if TARGET_RPI
-        OwrMediaSource* media_source = _owr_media_renderer_get_source(renderer);
-        GstElement* src_bin = _owr_media_source_get_source_bin(media_source);
-        GstElement* src_element = gst_bin_get_by_name(GST_BIN(src_bin), "video-source");
-        gboolean hflip = FALSE;
-        gboolean vflip = FALSE;
-
-        /* TODO: support remote video source orientation */
-        if (!src_element)
-            return;
-
-        if (mirror) {
-            if (rotation == 0)
-                vflip = TRUE;
-            else if (rotation == 1)
-                vflip = hflip = TRUE;
-            else if (rotation == 2)
-                hflip = TRUE;
-        }
-
-        g_object_set(src_element, "rotation", rotation * 90, "hflip", hflip, "vflip", vflip, NULL);
-        gst_object_unref(src_element);
-#endif
-    }
+    flip_method = _owr_rotation_and_mirror_to_video_flip_method(rotation, mirror);
+    g_object_set(flip, "method", flip_method, NULL);
 }
+
+
 
 static GstElement *owr_video_renderer_get_element(OwrMediaRenderer *renderer, guintptr window_handle)
 {

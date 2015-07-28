@@ -66,11 +66,7 @@ GST_DEBUG_CATEGORY_EXTERN(_owrlocalmediasource_debug);
 
 #elif defined(__linux__)
 #define AUDIO_SRC  "pulsesrc"
-#if TARGET_RPI
-#define VIDEO_SRC  "rpicamsrc"
-#else
 #define VIDEO_SRC  "v4l2src"
-#endif /* TARGET_RPI */
 #else
 #define AUDIO_SRC  "audiotestsrc"
 #define VIDEO_SRC  "videotestsrc"
@@ -566,13 +562,9 @@ static GstElement *owr_local_media_source_request_source(OwrMediaSource *media_s
 #elif defined(__ANDROID__)
                     g_object_set(source, "cam-index", priv->device_index, NULL);
 #elif defined(__linux__)
-#if !defined(TARGET_RPI) || !TARGET_RPI
                     tmp = g_strdup_printf("/dev/video%d", priv->device_index);
                     g_object_set(source, "device", tmp, NULL);
                     g_free(tmp);
-#else
-                    g_object_set(source, "preview", FALSE, NULL);
-#endif
 #endif
                 }
                 break;
