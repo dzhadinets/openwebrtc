@@ -377,12 +377,24 @@ static GstCaps *owr_video_renderer_get_caps(OwrMediaRenderer *renderer)
     GstCaps *caps;
     guint width = 0, height = 0;
     gdouble max_framerate = 0.0;
-
+       
+#if TARGET_RPI
+/* 
+ * FIX_ME: Fixate video reselution, should be controlled by java script
+ * video contrains but does not work propery 
+ * 
+ * - bram
+ */ 
+    width = 1280;
+    height = 720;
+    max_framerate = 30.0; 
+#else
     g_object_get(OWR_VIDEO_RENDERER(renderer),
         "width", &width,
         "height", &height,
         "max-framerate", &max_framerate,
         NULL);
+#endif
 
 #if TARGET_RPI
     caps = gst_caps_new_empty_simple("video/x-h264");
