@@ -381,7 +381,7 @@ static GstCaps *owr_video_renderer_get_caps(OwrMediaRenderer *renderer)
 #if TARGET_RPI
 /* 
  * FIX_ME: Fixate video reselution, should be controlled by java script
- * video contrains but does not work propery 
+ * video constraints but that does not work properly.
  * 
  * - bram
  */ 
