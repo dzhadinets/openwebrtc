@@ -294,10 +294,7 @@ static GstElement *owr_video_renderer_get_element(OwrMediaRenderer *renderer, gu
     OwrVideoRenderer *video_renderer;
     OwrVideoRendererPrivate *priv;
     GstElement *renderer_bin;
-#if !TARGET_RPI
-    GstElement *balance, *flip;
-#endif
-    GstElement *sink;
+    GstElement *balance, *flip, *sink;
     GstPad *ghostpad, *sinkpad;
     gchar *bin_name;
 
@@ -309,24 +306,20 @@ static GstElement *owr_video_renderer_get_element(OwrMediaRenderer *renderer, gu
     renderer_bin = gst_bin_new(bin_name);
     g_free(bin_name);
 
-#if !TARGET_RPI
     balance = gst_element_factory_make("videobalance", "video-renderer-balance");
+    g_assert(balance);
     flip = gst_element_factory_make("videoflip", "video-renderer-flip");
     g_assert(flip);
+    
     g_signal_connect_object(renderer, "notify::rotation", G_CALLBACK(update_flip_method), flip, 0);
     g_signal_connect_object(renderer, "notify::mirror", G_CALLBACK(update_flip_method), flip, 0);
-#else
-    g_signal_connect_object(renderer, "notify::rotation", G_CALLBACK(update_flip_method), NULL, 0);
-    g_signal_connect_object(renderer, "notify::mirror", G_CALLBACK(update_flip_method), NULL, 0);
-#endif
-
-    g_signal_connect_object(renderer, "notify::disabled", G_CALLBACK(renderer_disabled),
-        renderer_bin, 0);
+    g_signal_connect_object(renderer, "notify::disabled", G_CALLBACK(renderer_disabled), renderer_bin, 0);
 
     sink = OWR_MEDIA_RENDERER_GET_CLASS(renderer)->get_sink(renderer);
     //g_object_set(sink, "sync", FALSE, NULL);
     g_assert(sink);
     g_object_set(sink, "enable-last-sample", FALSE, NULL);
+    
     if (priv->tag) {
         GstElement *sink_element = GST_IS_BIN(sink) ?
             gst_bin_get_by_interface(GST_BIN(sink), GST_TYPE_VIDEO_OVERLAY) : sink;
@@ -337,17 +330,11 @@ static GstElement *owr_video_renderer_get_element(OwrMediaRenderer *renderer, gu
         if (GST_IS_BIN(sink))
             g_object_unref(sink_element);
     }
-
-    gst_bin_add(GST_BIN(renderer_bin), sink);
-
-#if TARGET_RPI
-    sinkpad = gst_element_get_static_pad(sink, "sink");
-#else
-    gst_bin_add_many(GST_BIN(renderer_bin), balance, flip, NULL);
-    LINK_ELEMENTS(flip, sink);
-    LINK_ELEMENTS(balance, flip);
+    gst_bin_add_many(GST_BIN(renderer_bin), flip, balance, sink, NULL);
+    if (!gst_element_link_many (balance, flip, sink, NULL)) {
+      g_warning ("Failed to link elements for bin: %s!", bin_name);
+    }
     sinkpad = gst_element_get_static_pad(balance, "sink");
-#endif
     g_assert(sinkpad);
     ghostpad = gst_ghost_pad_new("sink", sinkpad);
     gst_pad_set_active(ghostpad, TRUE);
@@ -380,10 +367,8 @@ static GstCaps *owr_video_renderer_get_caps(OwrMediaRenderer *renderer)
        
 #if TARGET_RPI
 /* 
- * FIX_ME: Fixate video reselution, should be controlled by java script
+ * FIX_ME: Fixate video resolution, should be controlled by java script
  * video constraints but that does not work properly.
- * 
- * - bram
  */ 
     width = 1280;
     height = 720;
