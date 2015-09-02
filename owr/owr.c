@@ -397,13 +397,14 @@ GMainContext * _owr_get_main_context()
 
 GstClockTime _owr_get_base_time()
 {
+#if !defined(TARGET_RPI) || !TARGET_RPI
     if (g_once_init_enter(&owr_base_time)) {
         GstClock *clock = gst_system_clock_obtain();
         GstClockTime base_time = gst_clock_get_time(clock);
         gst_object_unref(clock);
         g_once_init_leave(&owr_base_time, base_time);
     }
-
+#endif
     return owr_base_time;
 }
 
