@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Ericsson AB. All rights reserved.
- * Copyright (c) 2014, Centricular Ltd
+ * Copyright (C) 2015 Centricular Ltd.
  *     Author: Sebastian Dröge <sebastian@centricular.com>
  *
  * Redistribution and use in source and binary forms, with or without modification,
@@ -25,33 +24,41 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef __OWR_PRIVATE_H__
-#define __OWR_PRIVATE_H__
-
-#include "owr_message_origin_private.h"
-
-#include <glib.h>
+#ifndef __OWR_INTER_SINK_H__
+#define __OWR_INTER_SINK_H__
 
 #include <gst/gst.h>
 
 #ifndef __GTK_DOC_IGNORE__
 
-#define OWR_OBJECT_NAME_LENGTH_MAX 100
-
 G_BEGIN_DECLS
 
-/*< private >*/
-gboolean _owr_is_initialized(void);
-GMainContext * _owr_get_main_context(void);
-GstClockTime _owr_get_base_time(void);
-void _owr_schedule_with_user_data(GSourceFunc func, gpointer user_data);
-void _owr_schedule_with_hash_table(GSourceFunc func, GHashTable *hash_table);
-GHashTable *_owr_create_schedule_table_func(OwrMessageOrigin *origin, const gchar *function_name);
+#define OWR_TYPE_INTER_SINK            (_owr_inter_sink_get_type())
+#define OWR_INTER_SINK(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj), OWR_TYPE_INTER_SINK, OwrInterSink))
+#define OWR_IS_INTER_SINK(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj), OWR_TYPE_INTER_SINK))
+#define OWR_INTER_SINK_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass) , OWR_TYPE_INTER_SINK, OwrInterSinkClass))
+#define OWR_IS_INTER_SINK_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass) , OWR_TYPE_INTER_SINK))
+#define OWR_INTER_SINK_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj) , OWR_TYPE_INTER_SINK, OwrInterSinkClass))
 
-#define _owr_create_schedule_table(origin) _owr_create_schedule_table_func(origin, __FUNCTION__)
+typedef struct _OwrInterSink      OwrInterSink;
+typedef struct _OwrInterSinkClass OwrInterSinkClass;
+
+struct _OwrInterSink {
+    GstElement parent;
+
+    GstPad *sinkpad;
+    GWeakRef src_srcpad;
+    gboolean pending_sticky_events;
+};
+
+struct _OwrInterSinkClass {
+    GstElementClass parent_class;
+};
+
+GType _owr_inter_sink_get_type(void);
 
 G_END_DECLS
 
 #endif /* __GTK_DOC_IGNORE__ */
 
-#endif /* __OWR_PRIVATE_H__ */
+#endif /* __OWR_INTER_SINK_H__ */

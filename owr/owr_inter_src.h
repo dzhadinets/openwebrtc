@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2014-2015, Ericsson AB. All rights reserved.
- * Copyright (c) 2014, Centricular Ltd
+ * Copyright (C) 2015 Centricular Ltd.
  *     Author: Sebastian Dröge <sebastian@centricular.com>
  *
  * Redistribution and use in source and binary forms, with or without modification,
@@ -25,33 +24,42 @@
  * OF SUCH DAMAGE.
  */
 
-#ifndef __OWR_PRIVATE_H__
-#define __OWR_PRIVATE_H__
-
-#include "owr_message_origin_private.h"
-
-#include <glib.h>
+#ifndef __OWR_INTER_SRC_H__
+#define __OWR_INTER_SRC_H__
 
 #include <gst/gst.h>
 
 #ifndef __GTK_DOC_IGNORE__
 
-#define OWR_OBJECT_NAME_LENGTH_MAX 100
-
 G_BEGIN_DECLS
 
-/*< private >*/
-gboolean _owr_is_initialized(void);
-GMainContext * _owr_get_main_context(void);
-GstClockTime _owr_get_base_time(void);
-void _owr_schedule_with_user_data(GSourceFunc func, gpointer user_data);
-void _owr_schedule_with_hash_table(GSourceFunc func, GHashTable *hash_table);
-GHashTable *_owr_create_schedule_table_func(OwrMessageOrigin *origin, const gchar *function_name);
+#define OWR_TYPE_INTER_SRC            (_owr_inter_src_get_type())
+#define OWR_INTER_SRC(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj), OWR_TYPE_INTER_SRC, OwrInterSrc))
+#define OWR_IS_INTER_SRC(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj), OWR_TYPE_INTER_SRC))
+#define OWR_INTER_SRC_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass) , OWR_TYPE_INTER_SRC, OwrInterSrcClass))
+#define OWR_IS_INTER_SRC_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass) , OWR_TYPE_INTER_SRC))
+#define OWR_INTER_SRC_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj) , OWR_TYPE_INTER_SRC, OwrInterSrcClass))
 
-#define _owr_create_schedule_table(origin) _owr_create_schedule_table_func(origin, __FUNCTION__)
+typedef struct _OwrInterSrc      OwrInterSrc;
+typedef struct _OwrInterSrcClass OwrInterSrcClass;
+
+struct _OwrInterSrc {
+    GstBin parent;
+
+    GstElement *queue;
+    GstPad *internal_srcpad, *dummy_sinkpad;
+    GstPad *srcpad;
+    GWeakRef sink_sinkpad;
+};
+
+struct _OwrInterSrcClass {
+    GstBinClass parent_class;
+};
+
+GType _owr_inter_src_get_type(void);
 
 G_END_DECLS
 
 #endif /* __GTK_DOC_IGNORE__ */
 
-#endif /* __OWR_PRIVATE_H__ */
+#endif /* __OWR_INTER_SRC_H__ */
