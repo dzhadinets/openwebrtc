@@ -261,7 +261,7 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
 {
     OwrMediaType media_type;
     GstElement *source_pipeline, *tee;
-    GstElement *source_bin, *source = NULL, *queue_pre, *queue_post;
+    GstElement *source_bin, *source = NULL, *queue_pre, *queue_post, *first = NULL;
     GstElement *capsfilter;
     GstElement *sink, *sink_queue, *sink_bin;
     GstPad *bin_pad = NULL, *srcpad, *sinkpad;
@@ -304,11 +304,13 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
         LINK_ELEMENTS(audioresample, capsfilter);
         LINK_ELEMENTS(audioconvert, audioresample);
         LINK_ELEMENTS(queue_pre, audioconvert);
+        first = queue_pre;
 
         break;
         }
     case OWR_MEDIA_TYPE_VIDEO:
         {
+#if !TARGET_RPI
         GstElement *videorate = NULL, *videoscale, *videoconvert;
         GstStructure *s;
 
@@ -325,7 +327,12 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
             gst_structure_remove_field(s, "framerate");
             gst_bin_add(GST_BIN(source_bin), videorate);
         }
+#endif
 
+#if TARGET_RPI
+        gst_bin_add(GST_BIN(source_bin), queue_post);
+        first = queue_post;
+#else
         g_object_set(capsfilter, "caps", caps, NULL);
 
         CREATE_ELEMENT_WITH_ID(videoconvert, VIDEO_CONVERT, "source-video-convert", source_id);
@@ -341,8 +348,10 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
             LINK_ELEMENTS(videorate, videoscale);
             LINK_ELEMENTS(queue_pre, videorate);
         } else
-            LINK_ELEMENTS(queue_pre, videoscale);
-
+            LINK_ELEMENTS(queue_pre, videoscale);    
+                               
+        first = queue_pre;
+#endif
         break;
         }
     case OWR_MEDIA_TYPE_UNKNOWN:
@@ -390,7 +399,8 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
     gst_element_add_pad(source_bin, bin_pad);
 
     gst_bin_add(GST_BIN(source_bin), source);
-    LINK_ELEMENTS(source, queue_pre);
+    if (first)
+        LINK_ELEMENTS(source, first);
 
 done:
 

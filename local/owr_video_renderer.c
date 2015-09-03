@@ -255,7 +255,6 @@ OwrVideoRenderer *owr_video_renderer_new(const gchar *tag)
         NULL);
 }
 
-
 #define LINK_ELEMENTS(a, b) \
     if (!gst_element_link(a, b)) \
         GST_ERROR("Failed to link " #a " -> " #b);
@@ -286,8 +285,6 @@ static void update_flip_method(OwrMediaRenderer *renderer, GParamSpec *pspec, Gs
     flip_method = _owr_rotation_and_mirror_to_video_flip_method(rotation, mirror);
     g_object_set(flip, "method", flip_method, NULL);
 }
-
-
 
 static GstElement *owr_video_renderer_get_element(OwrMediaRenderer *renderer, guintptr window_handle)
 {
@@ -367,12 +364,13 @@ static GstCaps *owr_video_renderer_get_caps(OwrMediaRenderer *renderer)
        
 #if TARGET_RPI
 /* 
- * FIX_ME: Fixate video resolution, should be controlled by java script
- * video constraints but that does not work properly.
+ * FIXME: Fixate video reselution, should be controlled by java script
+ * video contrains but does not work propery 
+ * https://metrological.atlassian.net/browse/BRIDGE-42
  */ 
     width = 1280;
     height = 720;
-    max_framerate = 30.0; 
+    max_framerate = 30.0;
 #else
     g_object_get(OWR_VIDEO_RENDERER(renderer),
         "width", &width,
