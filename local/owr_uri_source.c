@@ -124,7 +124,7 @@ OwrMediaSource *_owr_uri_source_new(OwrMediaType media_type,
     priv->stream_id = stream_id;
     g_free(name);
 
-    _owr_media_source_set_codec(OWR_MEDIA_SOURCE(source), codec_type);
+    owr_media_source_set_codec(OWR_MEDIA_SOURCE(source), codec_type);
 
     /* create source tee and everything */
     if (media_type == OWR_MEDIA_TYPE_VIDEO)

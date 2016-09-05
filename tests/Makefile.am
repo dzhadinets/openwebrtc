@@ -61,8 +61,10 @@ test_client_CFLAGS = \
 test_client_LDADD = \
     $(JSON_GLIB_LIBS) \
     $(LIBSOUP_LIBS) \
+    $(GSTREAMER_LIBS) \
     $(GLIB_LIBS) \
-    $(top_builddir)/owr/libopenwebrtc.la
+    $(top_builddir)/owr/libopenwebrtc.la \
+    $(top_builddir)/gst/libopenwebrtc_gst.la
 endif
 
 list_devices_SOURCES = list_devices.c

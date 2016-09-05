@@ -32,6 +32,9 @@
 #include "config.h"
 #endif
 #include "owr_gst_media_source.h"
+#include "owr_media_source.h"
+#include "owr_media_source_private.h"
+#include "owr_private.h"
 
 #define OWR_GST_MEDIA_SOURCE_GET_PRIVATE(obj)    (G_TYPE_INSTANCE_GET_PRIVATE((obj), OWR_GST_TYPE_MEDIA_SOURCE, OwrGstMediaSourcePrivate))
 
@@ -151,11 +154,15 @@ static void owr_gst_media_source_get_property(GObject *object, guint property_id
  */
 OwrGstMediaSource *owr_gst_media_source_new(OwrMediaType media_type, OwrSourceType source_type, GstElement *source)
 {
-    return g_object_new(OWR_GST_TYPE_MEDIA_SOURCE,
+    OwrGstMediaSource *media_source = g_object_new(OWR_GST_TYPE_MEDIA_SOURCE,
         "media-type", media_type,
         "type", source_type,
         "source", source,
         NULL);
+    owr_media_source_set_supported_interfaces(OWR_MEDIA_SOURCE(media_source), OWR_MEDIA_SOURCE_SUPPORTS_VIDEO_ORIENTATION);
+//    owr_media_source_set_codec(OWR_MEDIA_SOURCE(media_source), OWR_CODEC_TYPE_VP8);
+
+    return media_source;
 }
 
 static GstElement *owr_gst_media_source_request_source(OwrMediaSource *media_source, GstCaps *caps)
@@ -180,8 +187,10 @@ static GstElement *owr_gst_media_source_request_source(OwrMediaSource *media_sou
         g_return_val_if_fail(gst_structure_has_name(structure, "audio/x-raw"), NULL);
         break;
     case OWR_MEDIA_TYPE_VIDEO:
-        g_return_val_if_fail(gst_structure_has_name(structure, "video/x-raw"), NULL);
-        break;
+        g_return_val_if_fail(gst_structure_has_name(structure, "video/x-h264") || gst_structure_has_name(structure, "video/x-vp8") || gst_structure_has_name(structure, "video/x-raw"), NULL);
+
+        
+break;
     case OWR_MEDIA_TYPE_UNKNOWN:
     default:
         g_assert_not_reached();

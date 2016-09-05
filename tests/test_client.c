@@ -36,21 +36,27 @@
 #include "owr_transport_agent.h"
 #include "owr_video_payload.h"
 #include "owr_video_renderer.h"
+#include "owr_gst_media_source.h"
 
 #include <gio/gio.h>
 #include <json-glib/json-glib.h>
 #include <libsoup/soup.h>
 #include <string.h>
 
-#define SERVER_URL "http://demo.openwebrtc.org"
+/*#define SERVER_URL "http://demo.openwebrtc.org"*/
+#define SERVER_URL "http://127.0.0.1:10080"
 
 #define ENABLE_PCMA TRUE
 #define ENABLE_PCMU TRUE
 #define ENABLE_OPUS TRUE
 #define ENABLE_H264 TRUE
-#define ENABLE_VP8  TRUE
+#define ENABLE_VP8  FALSE
 
-static GList *local_sources, *renderers;
+#define CUSTOM_AUDIO_SOURCE "audiotestsrc wave=10"
+#define CUSTOM_VIDEO_SOURCE "videotestsrc ! capsfilter caps=\"video/x-raw, width=(int)1280, height=(int)720\" ! videoscale ! x264enc ! h264parse ! capsfilter caps=\"video\\/x-h264\" "
+
+
+static GList /* *local_sources,*/ *renderers;
 static OwrTransportAgent *transport_agent;
 static gchar *session_id, *peer_id;
 static guint client_id;
@@ -59,6 +65,25 @@ static gchar *tcp_types[] = { "", "active", "passive", "so", NULL };
 
 static void read_eventstream_line(GDataInputStream *input_stream, gpointer user_data);
 static void got_local_sources(GList *sources, gchar *url);
+
+
+static OwrMediaSource* create_source(OwrMediaType type, const gchar *bin_description)
+{
+    OwrMediaSource *source;
+    GstElement *gst_source;
+    GError *error = NULL;
+
+    gst_source = gst_parse_bin_from_description(bin_description, TRUE, &error);
+    if (error != NULL) {
+        g_printerr("Error parsing '%s': %s", bin_description, error->message);
+        g_error_free(error);
+        error = NULL;
+        source = NULL;
+    } else
+        source = OWR_MEDIA_SOURCE(owr_gst_media_source_new(type, OWR_SOURCE_TYPE_CAPTURE, gst_source));
+    return source;
+}
+
 
 static void got_remote_source(OwrMediaSession *media_session, OwrMediaSource *source,
     gpointer user_data)
@@ -455,9 +480,9 @@ static void handle_offer(JsonReader *reader)
     OwrComponentType component_type;
     const gchar *ice_ufrag, *ice_password;
     OwrPayload *send_payload, *receive_payload;
-    GList *list_item;
+/*    GList *list_item;*/
     OwrMediaSource *source;
-    OwrMediaType source_media_type;
+/*    OwrMediaType source_media_type;*/
     GList *media_sessions;
 
     json_reader_read_member(reader, "mediaDescriptions");
@@ -596,6 +621,22 @@ end_payload:
         g_signal_connect(media_session, "notify::dtls-certificate",
             G_CALLBACK(got_dtls_certificate), NULL);
 
+        source = NULL;
+        switch(media_type)
+        {
+        case OWR_MEDIA_TYPE_VIDEO:
+            source = create_source(OWR_MEDIA_TYPE_VIDEO, CUSTOM_VIDEO_SOURCE);
+            break;
+        case OWR_MEDIA_TYPE_AUDIO:
+            source = create_source(OWR_MEDIA_TYPE_AUDIO, CUSTOM_AUDIO_SOURCE);
+            break;
+        default:
+	    g_warn_if_reached();
+        }
+        g_assert(source);
+        owr_media_session_set_send_source(media_session, source);
+
+/*
         for (list_item = local_sources; list_item; list_item = list_item->next) {
             source = OWR_MEDIA_SOURCE(list_item->data);
             g_object_get(source, "media-type", &source_media_type, NULL);
@@ -605,6 +646,7 @@ end_payload:
                 break;
             }
         }
+*/
         media_sessions = g_object_get_data(G_OBJECT(transport_agent), "media-sessions");
         media_sessions = g_list_append(media_sessions, media_session);
         g_object_set_data(G_OBJECT(transport_agent), "media-sessions", media_sessions);
@@ -669,10 +711,10 @@ static void reset()
         transport_agent = NULL;
     }
 
-    g_list_free(local_sources);
+/*    g_list_free(local_sources);
     local_sources = NULL;
     owr_get_capture_sources(OWR_MEDIA_TYPE_AUDIO | OWR_MEDIA_TYPE_VIDEO,
-        (OwrCaptureSourcesCallback)got_local_sources, NULL);
+        (OwrCaptureSourcesCallback)got_local_sources, NULL); */
 }
 
 static void eventstream_line_read(GDataInputStream *input_stream, GAsyncResult *result,
@@ -770,7 +812,8 @@ static void send_eventsource_request(const gchar *url)
 
 static void got_local_sources(GList *sources, gchar *url)
 {
-    local_sources = g_list_copy(sources);
+/*    local_sources = g_list_copy(sources);*/
+    (void)sources;
     transport_agent = owr_transport_agent_new(FALSE);
     owr_transport_agent_add_helper_server(transport_agent, OWR_HELPER_SERVER_TYPE_STUN,
         "stun.services.mozilla.com", 3478, NULL, NULL);
@@ -793,8 +836,9 @@ gint main(gint argc, gchar **argv)
     client_id = g_random_int();
     url = g_strdup_printf(SERVER_URL"/stoc/%s/%u", session_id, client_id);
     owr_init(NULL);
-    owr_get_capture_sources(OWR_MEDIA_TYPE_AUDIO | OWR_MEDIA_TYPE_VIDEO,
-        (OwrCaptureSourcesCallback)got_local_sources, url);
+    got_local_sources(NULL, url);
+/*    owr_get_capture_sources(OWR_MEDIA_TYPE_AUDIO | OWR_MEDIA_TYPE_VIDEO,
+        (OwrCaptureSourcesCallback)got_local_sources, url); */
     owr_run();
     return 0;
 }

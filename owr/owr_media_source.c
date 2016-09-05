@@ -605,7 +605,7 @@ OwrCodecType _owr_media_source_get_codec(OwrMediaSource *media_source)
     return media_source->priv->codec_type;
 }
 
-void _owr_media_source_set_codec(OwrMediaSource *media_source, OwrCodecType codec_type)
+void owr_media_source_set_codec(OwrMediaSource *media_source, OwrCodecType codec_type)
 {
     g_return_if_fail(OWR_IS_MEDIA_SOURCE(media_source));
     /* an enum is an int type so we can use atomic assignment */
@@ -626,7 +626,7 @@ gchar * owr_media_source_get_dot_data(OwrMediaSource *source)
 #endif
 }
 
-void _owr_media_source_set_supported_interfaces(OwrMediaSource *source, OwrMediaSourceSupportedInterfaces interfaces)
+void owr_media_source_set_supported_interfaces(OwrMediaSource *source, OwrMediaSourceSupportedInterfaces interfaces)
 {
     g_return_if_fail(OWR_IS_MEDIA_SOURCE(source));
     source->priv->supported_interfaces = interfaces;

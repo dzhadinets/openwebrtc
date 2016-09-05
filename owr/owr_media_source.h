@@ -68,6 +68,16 @@ struct _OwrMediaSourceClass {
 GType owr_media_source_get_type(void) G_GNUC_CONST;
 gchar * owr_media_source_get_dot_data(OwrMediaSource *source);
 
+typedef enum {
+    OWR_MEDIA_SOURCE_SUPPORTS_NONE = 0,
+    OWR_MEDIA_SOURCE_SUPPORTS_VIDEO_ORIENTATION = (1 << 0),
+    OWR_MEDIA_SOURCE_SUPPORTS_COLOR_BALANCE = (1 << 1),
+} OwrMediaSourceSupportedInterfaces;
+
+void owr_media_source_set_codec(OwrMediaSource *source, OwrCodecType codec_type);
+void owr_media_source_set_supported_interfaces(OwrMediaSource *source, OwrMediaSourceSupportedInterfaces interfaces);
+
+
 G_END_DECLS
 
 #endif /* __OWR_MEDIA_SOURCE_H__ */

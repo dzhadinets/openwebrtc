@@ -408,7 +408,6 @@ static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer user_data)
         g_printerr("Debugging info: %s\n", (debug) ? debug : "none");
 
         g_printerr("==== %s message stop ====\n", message_type);
-        /*GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "pipeline.dot");*/
 
         if (!is_warning) {
             OWR_POST_ERROR(transport_agent, PROCESSING_ERROR, NULL);
@@ -830,13 +829,20 @@ static void handle_new_send_source(OwrTransportAgent *transport_agent,
     stream_id = get_stream_id(transport_agent, OWR_SESSION(media_session));
     g_return_if_fail(stream_id);
 
+    GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_pipeline_before");
+
     gst_bin_add(GST_BIN(transport_agent->priv->pipeline), src);
+
+    GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_pipeline_added");
+
     if (!link_source_to_transport_bin(srcpad, transport_agent->priv->pipeline, transport_bin, media_type, codec_type, stream_id)) {
         gchar *name = "";
         g_object_get(send_source, "name", &name, NULL);
         GST_ERROR("Failed to link \"%s\" with transport bin", name);
     }
     gst_object_unref(srcpad);
+
+    GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_pipeline_linked");
 
     gst_element_sync_state_with_parent(src);
 }
@@ -1131,6 +1137,9 @@ static gboolean add_session(GHashTable *args)
         on_new_remote_candidate(transport_agent, TRUE, session);
 
     state_change_status = gst_element_set_state(transport_agent->priv->pipeline, GST_STATE_PLAYING);
+        GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_pipeline_playing");
+
+
     g_warn_if_fail(state_change_status != GST_STATE_CHANGE_FAILURE);
 
 end:

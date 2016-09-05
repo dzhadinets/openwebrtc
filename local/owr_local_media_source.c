@@ -743,7 +743,7 @@ static OwrLocalMediaSource *_owr_local_media_source_new(gint device_index, const
         NULL);
 
     _owr_media_source_set_type(OWR_MEDIA_SOURCE(source), source_type);
-    _owr_media_source_set_supported_interfaces(OWR_MEDIA_SOURCE(source), interfaces);
+    owr_media_source_set_supported_interfaces(OWR_MEDIA_SOURCE(source), interfaces);
 
     return source;
 }

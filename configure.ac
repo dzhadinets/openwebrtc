@@ -96,7 +96,7 @@ AC_HELP_STRING(
 esac],[enable_tests=yes])
 AC_MSG_RESULT([$enable_tests])
 if test "x$enable_tests" = xyes; then
-  PKG_CHECK_MODULES(JSON_GLIB, [json-glib-1.0], [$have_json_glib=yes], [$have_json_glib=no])
+  PKG_CHECK_MODULES(JSON_GLIB, [json-glib-1.0], [have_json_glib=yes], [have_json_glib=no])
   PKG_CHECK_MODULES(LIBSOUP, [libsoup-2.4])
   AC_DEFINE(OWR_TESTS, 1,
   [Define if building tests])
