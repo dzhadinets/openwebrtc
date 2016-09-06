@@ -184,7 +184,7 @@ static GstElement *owr_gst_media_source_request_source(OwrMediaSource *media_sou
     structure = gst_caps_get_structure(caps, 0);
     switch (media_type) {
     case OWR_MEDIA_TYPE_AUDIO:
-        g_return_val_if_fail(gst_structure_has_name(structure, "audio/x-raw"), NULL);
+        g_return_val_if_fail(gst_structure_has_name(structure, "audio/x-opus") || gst_structure_has_name(structure, "audio/x-ulaw") || gst_structure_has_name(structure, "audio/x-alaw") || gst_structure_has_name(structure, "audio/x-raw"), NULL);
         break;
     case OWR_MEDIA_TYPE_VIDEO:
         g_return_val_if_fail(gst_structure_has_name(structure, "video/x-h264") || gst_structure_has_name(structure, "video/x-vp8") || gst_structure_has_name(structure, "video/x-raw"), NULL);
