@@ -778,7 +778,7 @@ static gboolean link_source_to_transport_bin(GstPad *srcpad, GstElement *pipelin
     if (media_type == OWR_MEDIA_TYPE_VIDEO)
         g_snprintf(name, OWR_OBJECT_NAME_LENGTH_MAX, "video_sink_%u_%u", codec_type, stream_id);
     else if (media_type == OWR_MEDIA_TYPE_AUDIO)
-        g_snprintf(name, OWR_OBJECT_NAME_LENGTH_MAX, "audio_raw_sink_%u", stream_id);
+        g_snprintf(name, OWR_OBJECT_NAME_LENGTH_MAX, "audio_sink_%u_%u", codec_type, stream_id);
     sinkpad = gst_element_get_static_pad(transport_bin, name);
 
     ret = gst_pad_link(srcpad, sinkpad) == GST_PAD_LINK_OK;
@@ -821,6 +821,7 @@ static void handle_new_send_source(OwrTransportAgent *transport_agent,
     caps = _owr_payload_create_raw_caps(send_payload);
     src = _owr_media_source_request_source(send_source, caps);
     g_assert(src);
+
     gst_caps_unref(caps);
     srcpad = gst_element_get_static_pad(src, "src");
     g_assert(srcpad);
@@ -918,13 +919,16 @@ static void remove_existing_send_source_and_payload(OwrTransportAgent *transport
 
     stream_id = get_stream_id(transport_agent, OWR_SESSION(media_session));
 
+    GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_pipeline_removing");
+    GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->transport_bin), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_bin_removing");
+
     /* Unlink the source bin */
     g_object_get(media_source, "media-type", &media_type, NULL);
     g_warn_if_fail(media_type != OWR_MEDIA_TYPE_UNKNOWN);
     if (media_type == OWR_MEDIA_TYPE_VIDEO)
         pad_name = g_strdup_printf("video_sink_%u_%u", codec_type, stream_id);
     else
-        pad_name = g_strdup_printf("audio_raw_sink_%u", stream_id);
+        pad_name = g_strdup_printf("audio_sink_%u_%u", codec_type, stream_id);
     sinkpad = gst_element_get_static_pad(transport_agent->priv->transport_bin, pad_name);
     g_assert(sinkpad);
     g_free(pad_name);
@@ -2300,16 +2304,18 @@ static void handle_new_send_payload(OwrTransportAgent *transport_agent, OwrMedia
             gst_bin_add(GST_BIN(send_input_bin), encoder_capsfilter);
         }
     } else { /* Audio */
-        encoder = _owr_payload_create_encoder(payload);
-        parser = _owr_create_parser(_owr_payload_get_codec_type(payload));
+       if (!_owr_media_source_supports_interfaces(media_source, OWR_MEDIA_SOURCE_SUPPORTS_VIDEO_ORIENTATION)) {
+          encoder = _owr_payload_create_encoder(payload);
+          parser = _owr_create_parser(_owr_payload_get_codec_type(payload));
 
-        encoder_sink_pad = gst_element_get_static_pad(encoder, "sink");
-        g_signal_connect(encoder_sink_pad, "notify::caps", G_CALLBACK(on_caps), OWR_SESSION(media_session));
-        gst_object_unref(encoder_sink_pad);
+          encoder_sink_pad = gst_element_get_static_pad(encoder, "sink");
+          g_signal_connect(encoder_sink_pad, "notify::caps", G_CALLBACK(on_caps), OWR_SESSION(media_session));
+          gst_object_unref(encoder_sink_pad);
 
-        gst_bin_add(GST_BIN(send_input_bin), encoder);
-        if (parser)
-            gst_bin_add(GST_BIN(send_input_bin), parser);
+          gst_bin_add(GST_BIN(send_input_bin), encoder);
+          if (parser)
+             gst_bin_add(GST_BIN(send_input_bin), parser);
+       }
     }
 
     payloader = _owr_payload_create_payload_packetizer(payload);

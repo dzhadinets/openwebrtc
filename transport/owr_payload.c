@@ -532,10 +532,10 @@ GstCaps * _owr_payload_create_raw_caps(OwrPayload *payload)
     switch (media_type) {
     case OWR_MEDIA_TYPE_AUDIO:
         if (OWR_IS_AUDIO_PAYLOAD(payload))
-            g_object_get(OWR_AUDIO_PAYLOAD(payload), "channels", &channels, NULL);
-        caps = gst_caps_new_simple("audio/x-raw",
-            "rate", G_TYPE_INT, priv->clock_rate,
-            NULL);
+           g_object_get(OWR_AUDIO_PAYLOAD(payload), "channels", &channels, NULL);
+        caps = gst_caps_new_simple(_owr_codec_type_to_caps_mime(media_type, priv->codec_type),
+                                         "rate", G_TYPE_INT, priv->clock_rate,
+                                         NULL);
         if (channels > 0) {
             gst_caps_set_simple(caps,
                 "channels", G_TYPE_INT, channels,

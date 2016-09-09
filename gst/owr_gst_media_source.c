@@ -25,7 +25,7 @@
  */
 
 /*/
-\*\ OwrGstMediaSource
+  \*\ OwrGstMediaSource
 /*/
 
 #ifdef HAVE_CONFIG_H
@@ -35,113 +35,115 @@
 #include "owr_media_source.h"
 #include "owr_media_source_private.h"
 #include "owr_private.h"
-
+#include <stdio.h>
 #define OWR_GST_MEDIA_SOURCE_GET_PRIVATE(obj)    (G_TYPE_INSTANCE_GET_PRIVATE((obj), OWR_GST_TYPE_MEDIA_SOURCE, OwrGstMediaSourcePrivate))
 
 G_DEFINE_TYPE(OwrGstMediaSource, owr_gst_media_source, OWR_TYPE_MEDIA_SOURCE)
 
 enum {
-    PROP_0,
-    PROP_SOURCE,
-    N_PROPERTIES
+   PROP_0,
+   PROP_SOURCE,
+   N_PROPERTIES
 };
 
 static GParamSpec *obj_properties[N_PROPERTIES] = {NULL, };
 
 static void owr_gst_media_source_set_property(GObject *object, guint property_id,
-    const GValue *value, GParamSpec *pspec);
+                                              const GValue *value, GParamSpec *pspec);
 static void owr_gst_media_source_get_property(GObject *object, guint property_id,
-    GValue *value, GParamSpec *pspec);
+                                              GValue *value, GParamSpec *pspec);
 
 static GstElement *owr_gst_media_source_request_source(OwrMediaSource *media_source, GstCaps *caps);
+static void owr_gst_media_source_release_source(OwrMediaSource *media_source, GstElement *source);
 
 struct _OwrGstMediaSourcePrivate {
-    GstElement *source;
+   GstElement *source;
 };
 
 static void owr_gst_media_source_dispose(GObject *object)
 {
-    OwrGstMediaSource *renderer = OWR_GST_MEDIA_SOURCE(object);
-    OwrGstMediaSourcePrivate *priv = renderer->priv;
+   OwrGstMediaSource *renderer = OWR_GST_MEDIA_SOURCE(object);
+   OwrGstMediaSourcePrivate *priv = renderer->priv;
 
-    if (priv->source) {
-        gst_object_unref(priv->source);
-        priv->source = NULL;
-    }
+   if (priv->source) {
+      gst_object_unref(priv->source);
+      priv->source = NULL;
+   }
 
-    G_OBJECT_CLASS(owr_gst_media_source_parent_class)->dispose(object);
+   G_OBJECT_CLASS(owr_gst_media_source_parent_class)->dispose(object);
 }
 
 static void owr_gst_media_source_class_init(OwrGstMediaSourceClass *klass)
 {
-    GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-    OwrMediaSourceClass *media_source_class = OWR_MEDIA_SOURCE_CLASS(klass);
+   GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+   OwrMediaSourceClass *media_source_class = OWR_MEDIA_SOURCE_CLASS(klass);
 
-    g_type_class_add_private(klass, sizeof(OwrGstMediaSourcePrivate));
+   g_type_class_add_private(klass, sizeof(OwrGstMediaSourcePrivate));
 
-    obj_properties[PROP_SOURCE] = g_param_spec_object("source", "source",
-        "Audio or video source to use", G_TYPE_OBJECT,
-        G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
+   obj_properties[PROP_SOURCE] = g_param_spec_object("source", "source",
+                                                     "Audio or video source to use", G_TYPE_OBJECT,
+                                                     G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
 
-    gobject_class->set_property = owr_gst_media_source_set_property;
-    gobject_class->get_property = owr_gst_media_source_get_property;
+   gobject_class->set_property = owr_gst_media_source_set_property;
+   gobject_class->get_property = owr_gst_media_source_get_property;
 
-    gobject_class->dispose = owr_gst_media_source_dispose;
+   gobject_class->dispose = owr_gst_media_source_dispose;
 
-    media_source_class->request_source = (void *(*)(OwrMediaSource *, void *))owr_gst_media_source_request_source;
+   media_source_class->request_source = (void *(*)(OwrMediaSource *, void *))owr_gst_media_source_request_source;
+   media_source_class->release_source = (void (*)(OwrMediaSource *, void *))owr_gst_media_source_release_source;
 
-    g_object_class_install_properties(gobject_class, N_PROPERTIES, obj_properties);
+   g_object_class_install_properties(gobject_class, N_PROPERTIES, obj_properties);
 }
 
 static void owr_gst_media_source_init(OwrGstMediaSource *source)
 {
-    OwrGstMediaSourcePrivate *priv;
-    source->priv = priv = OWR_GST_MEDIA_SOURCE_GET_PRIVATE(source);
+   OwrGstMediaSourcePrivate *priv;
+   source->priv = priv = OWR_GST_MEDIA_SOURCE_GET_PRIVATE(source);
 
-    priv->source = NULL;
+   priv->source = NULL;
 }
 
 static void owr_gst_media_source_set_property(GObject *object, guint property_id,
-    const GValue *value, GParamSpec *pspec)
+                                              const GValue *value, GParamSpec *pspec)
 {
-    OwrGstMediaSourcePrivate *priv;
-    GstElement *source;
+   OwrGstMediaSourcePrivate *priv;
+   GstElement *source;
 
-    g_return_if_fail(object);
-    priv = OWR_GST_MEDIA_SOURCE_GET_PRIVATE(object);
+   g_return_if_fail(object);
+   priv = OWR_GST_MEDIA_SOURCE_GET_PRIVATE(object);
 
-    switch (property_id) {
-    case PROP_SOURCE:
-        source = g_value_get_object(value);
-        if (!GST_IS_ELEMENT(source))
+   switch (property_id) {
+      case PROP_SOURCE:
+         source = g_value_get_object(value);
+         if (!GST_IS_ELEMENT(source))
             break;
-        if (priv->source)
+         if (priv->source)
             gst_object_unref(priv->source);
-        priv->source = source;
-        gst_object_ref_sink(source);
-        break;
-    default:
-        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
-        break;
-    }
+         priv->source = source;
+         gst_object_ref_sink(source);
+         break;
+      default:
+         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
+         break;
+   }
 }
 
 static void owr_gst_media_source_get_property(GObject *object, guint property_id,
-    GValue *value, GParamSpec *pspec)
+                                              GValue *value, GParamSpec *pspec)
 {
-    OwrGstMediaSourcePrivate *priv;
+   OwrGstMediaSourcePrivate *priv;
 
-    g_return_if_fail(object);
-    priv = OWR_GST_MEDIA_SOURCE_GET_PRIVATE(object);
+   g_return_if_fail(object);
+   priv = OWR_GST_MEDIA_SOURCE_GET_PRIVATE(object);
 
-    switch (property_id) {
-    case PROP_SOURCE:
-        g_value_set_object(value, priv->source);
-        break;
-    default:
-        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
-        break;
-    }
+   switch (property_id) {
+      case PROP_SOURCE:
+         g_value_set_object(value, priv->source);
+         break;
+      default:
+         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
+         break;
+   }
 }
 
 /**
@@ -154,49 +156,77 @@ static void owr_gst_media_source_get_property(GObject *object, guint property_id
  */
 OwrGstMediaSource *owr_gst_media_source_new(OwrMediaType media_type, OwrSourceType source_type, GstElement *source)
 {
-    OwrGstMediaSource *media_source = g_object_new(OWR_GST_TYPE_MEDIA_SOURCE,
-        "media-type", media_type,
-        "type", source_type,
-        "source", source,
-        NULL);
-    owr_media_source_set_supported_interfaces(OWR_MEDIA_SOURCE(media_source), OWR_MEDIA_SOURCE_SUPPORTS_VIDEO_ORIENTATION);
-//    owr_media_source_set_codec(OWR_MEDIA_SOURCE(media_source), OWR_CODEC_TYPE_VP8);
+   OwrGstMediaSource *media_source = g_object_new(OWR_GST_TYPE_MEDIA_SOURCE,
+                                                  "media-type", media_type,
+                                                  "type", source_type,
+                                                  "source", source,
+                                                  NULL);
+   owr_media_source_set_supported_interfaces(OWR_MEDIA_SOURCE(media_source), OWR_MEDIA_SOURCE_SUPPORTS_VIDEO_ORIENTATION);
 
-    return media_source;
+   return media_source;
 }
 
 static GstElement *owr_gst_media_source_request_source(OwrMediaSource *media_source, GstCaps *caps)
 {
-    OwrGstMediaSourcePrivate *priv = OWR_GST_MEDIA_SOURCE(media_source)->priv;
-    OwrMediaType media_type = OWR_MEDIA_TYPE_UNKNOWN;
-    GstStructure *structure;
+   OwrGstMediaSourcePrivate *priv = OWR_GST_MEDIA_SOURCE(media_source)->priv;
+   OwrMediaType media_type = OWR_MEDIA_TYPE_UNKNOWN;
+   GstStructure *structure;
+   gchar *bin_name;
+   static guint source_id = 0;
 
-    g_assert(priv->source);
-    g_assert(caps);
+   g_assert(priv->source);
+   g_assert(caps);
 
-    g_object_get(media_source, "media-type", &media_type, NULL);
-    if (media_type == OWR_MEDIA_TYPE_UNKNOWN) {
-        GST_ERROR_OBJECT(media_source,
-                "Cannot connect source with unknown media type to other component");
-        return NULL;
-    }
+   g_object_get(media_source, "media-type", &media_type, NULL);
+   if (media_type == OWR_MEDIA_TYPE_UNKNOWN) {
+      GST_ERROR_OBJECT(media_source,
+                       "Cannot connect source with unknown media type to other component");
+      return NULL;
+   }
 
-    structure = gst_caps_get_structure(caps, 0);
-    switch (media_type) {
-    case OWR_MEDIA_TYPE_AUDIO:
-        g_return_val_if_fail(gst_structure_has_name(structure, "audio/x-opus") || gst_structure_has_name(structure, "audio/x-ulaw") || gst_structure_has_name(structure, "audio/x-alaw") || gst_structure_has_name(structure, "audio/x-raw"), NULL);
-        break;
-    case OWR_MEDIA_TYPE_VIDEO:
-        g_return_val_if_fail(gst_structure_has_name(structure, "video/x-h264") || gst_structure_has_name(structure, "video/x-vp8") || gst_structure_has_name(structure, "video/x-raw"), NULL);
+   structure = gst_caps_get_structure(caps, 0);
+   switch (media_type) {
+      case OWR_MEDIA_TYPE_AUDIO:
+         g_return_val_if_fail(gst_structure_has_name(structure, "audio/x-opus") || gst_structure_has_name(structure, "audio/x-ulaw") || gst_structure_has_name(structure, "audio/x-alaw") || gst_structure_has_name(structure, "audio/x-raw"), NULL);
+         break;
+      case OWR_MEDIA_TYPE_VIDEO:
+         g_return_val_if_fail(gst_structure_has_name(structure, "video/x-h264") || gst_structure_has_name(structure, "video/x-vp8") || gst_structure_has_name(structure, "video/x-raw"), NULL);
+         break;
+      case OWR_MEDIA_TYPE_UNKNOWN:
+      default:
+         g_assert_not_reached();
+         return NULL;
+   }
 
-        
-break;
-    case OWR_MEDIA_TYPE_UNKNOWN:
-    default:
-        g_assert_not_reached();
-        return NULL;
-    }
-    g_return_val_if_fail(priv->source, NULL);
+   bin_name = g_strdup_printf("source-bin-%u", source_id++);
+   gst_element_set_name(priv->source, bin_name);
+   g_free(bin_name);
 
-    return priv->source;
+   g_return_val_if_fail(priv->source, NULL);
+
+   return priv->source;
 }
+
+static void owr_gst_media_source_release_source(OwrMediaSource *media_source, GstElement *source)
+{
+   OwrGstMediaSourcePrivate *priv = OWR_GST_MEDIA_SOURCE(media_source)->priv;
+   gchar *source_name;
+   guint source_id = -1;
+
+   source_name = gst_object_get_name(GST_OBJECT(source));
+
+   g_assert(source == priv->source);
+
+   if (!source_name || sscanf(source_name, "source-bin-%u", &source_id) != 1) {
+      GST_WARNING_OBJECT(media_source,
+                         "Failed to get %s for clean up", source_name);
+      g_free(source_name);
+      return;
+   }
+   g_free(source_name);
+
+   GST_DEBUG_OBJECT(media_source, "Unlinking source %u", source_id);
+}
+
+
+
