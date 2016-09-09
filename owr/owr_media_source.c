@@ -42,8 +42,10 @@
 #include "owr_utils.h"
 
 #include <gst/gst.h>
+#if 0
 #define GST_USE_UNSTABLE_API
 #include <gst/gl/gl.h>
+#endif
 #include <stdio.h>
 
 #ifdef __APPLE__
@@ -313,11 +315,11 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
         }
     case OWR_MEDIA_TYPE_VIDEO:
         if (_owr_codec_type_is_raw(_owr_media_source_get_codec(media_source))) {
+#if 0
             GstElement *videorate = NULL, *videoscale = NULL, *videoconvert;
             GstStructure *s;
             GstCapsFeatures *features;
             GstElement *glload;
-
             s = gst_caps_get_structure(caps, 0);
             if (gst_structure_has_field(s, "framerate")) {
                 gint fps_n = 0, fps_d = 0;
@@ -345,9 +347,9 @@ static GstElement *owr_media_source_request_source_default(OwrMediaSource *media
                 gst_bin_add_many(GST_BIN(source_bin),
                     glload, videoscale, videoconvert, NULL);
             }
-
             CREATE_ELEMENT_WITH_ID(queue_post, "queue", "source-output-queue", source_id);
             gst_bin_add(GST_BIN(source_bin), queue_post);
+#endif
         }
         break;
     case OWR_MEDIA_TYPE_UNKNOWN:
