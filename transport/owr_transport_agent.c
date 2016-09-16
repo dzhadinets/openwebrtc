@@ -933,7 +933,6 @@ static void remove_existing_send_source_and_payload(OwrTransportAgent *transport
    g_free(pad_name);
    if (!sinkpad)
    {
-      _owr_media_source_release_source(media_source, NULL);
       return;
    }
    g_assert(sinkpad);
