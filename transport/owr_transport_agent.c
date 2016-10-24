@@ -197,6 +197,7 @@ static void owr_transport_agent_get_property(GObject *object, guint property_id,
 static void add_helper_server_info(GResolver *resolver, GAsyncResult *result, GHashTable *info);
 static void update_helper_servers(OwrTransportAgent *transport_agent, guint stream_id);
 static gboolean add_session(GHashTable *args);
+static gboolean remove_session(GHashTable *args);
 static guint get_stream_id(OwrTransportAgent *transport_agent, OwrSession *session);
 static OwrSession * get_session(OwrTransportAgent *transport_agent, guint stream_id);
 static void prepare_transport_bin_send_elements(OwrTransportAgent *transport_agent, guint stream_id, gboolean rtcp_mux, PendingSessionInfo *pending_session_info);
@@ -205,10 +206,17 @@ static void prepare_transport_bin_data_receive_elements(OwrTransportAgent *trans
                                                         guint stream_id);
 static void prepare_transport_bin_data_send_elements(OwrTransportAgent *transport_agent,
                                                      guint stream_id);
+
+static void remove_transport_bin_send_elements(OwrTransportAgent *transport_agent, guint stream_id);
+static void remove_transport_bin_receive_elements(OwrTransportAgent *transport_agent, guint stream_id);
+static void remove_transport_bin_data_receive_elements(OwrTransportAgent *transport_agent, guint stream_id);
+static void remove_transport_bin_data_send_elements(OwrTransportAgent *transport_agent, guint stream_id);
+
 static void set_send_ssrc_and_cname(OwrTransportAgent *agent, OwrMediaSession *media_session);
 static void on_new_candidate(NiceAgent *nice_agent, NiceCandidate *nice_candidate, OwrTransportAgent *transport_agent);
 static void on_candidate_gathering_done(NiceAgent *nice_agent, guint stream_id, OwrTransportAgent *transport_agent);
 static void on_component_state_changed(NiceAgent *nice_agent, guint stream_id, guint component_id, OwrIceState state, OwrTransportAgent *transport_agent);
+static void on_streams_removed(NiceAgent *nice_agent, guint *stream_ids, OwrTransportAgent *transport_agent);
 static void handle_new_send_payload(OwrTransportAgent *transport_agent, OwrMediaSession *media_session, OwrPayload * payload);
 static void on_new_remote_candidate(OwrTransportAgent *transport_agent, gboolean forced, OwrSession *session);
 static void on_local_candidate_change(OwrTransportAgent *transport_agent, OwrCandidate *candidate, OwrSession *session);
@@ -449,12 +457,16 @@ static void owr_transport_agent_init(OwrTransportAgent *transport_agent)
    priv->nice_agent = nice_agent_new(_owr_get_main_context(), NICE_COMPATIBILITY_RFC5245);
    g_object_bind_property(transport_agent, "ice-controlling-mode", priv->nice_agent,
                           "controlling-mode", G_BINDING_SYNC_CREATE);
+   g_object_set(priv->nice_agent, "keepalive-conncheck", TRUE, NULL);
+
    g_signal_connect(G_OBJECT(priv->nice_agent), "new-candidate-full",
                     G_CALLBACK(on_new_candidate), transport_agent);
    g_signal_connect(G_OBJECT(priv->nice_agent), "candidate-gathering-done",
                     G_CALLBACK(on_candidate_gathering_done), transport_agent);
    g_signal_connect(G_OBJECT(priv->nice_agent), "component-state-changed",
                     G_CALLBACK(on_component_state_changed), transport_agent);
+   g_signal_connect(G_OBJECT(priv->nice_agent), "streams-removed",
+                    G_CALLBACK(on_streams_removed), transport_agent);
    g_signal_connect(G_OBJECT(priv->nice_agent), "new-selected-pair-full",
                     G_CALLBACK(on_new_selected_pair), transport_agent);
 
@@ -556,7 +568,7 @@ static void owr_transport_agent_get_property(GObject *object, guint property_id,
 
 OwrTransportAgent * owr_transport_agent_new(gboolean ice_controlling_mode)
 {
-   return g_object_new(OWR_TYPE_TRANSPORT_AGENT, "ice-controlling_mode", ice_controlling_mode,
+   return g_object_new(OWR_TYPE_TRANSPORT_AGENT, "ice-controlling-mode", ice_controlling_mode,
                        NULL);
 }
 
@@ -643,6 +655,28 @@ void owr_transport_agent_add_session(OwrTransportAgent *agent, OwrSession *sessi
    g_object_ref(agent);
 
    _owr_schedule_with_hash_table((GSourceFunc)add_session, args);
+
+}
+
+/**
+ * owr_transport_agent_remove_session:
+ * @agent:
+ * @session: (transfer full):
+ */
+void owr_transport_agent_remove_session(OwrTransportAgent *agent, OwrSession *session)
+{
+   GHashTable *args;
+
+   g_return_if_fail(agent);
+   g_return_if_fail(OWR_IS_MEDIA_SESSION(session) || OWR_IS_DATA_SESSION(session));
+
+   args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(agent));
+   g_hash_table_insert(args, "transport_agent", agent);
+   g_hash_table_insert(args, "session", session);
+
+   g_object_ref(agent);
+
+   _owr_schedule_with_hash_table((GSourceFunc)remove_session, args);
 
 }
 
@@ -933,9 +967,9 @@ static void remove_existing_send_source_and_payload(OwrTransportAgent *transport
    g_free(pad_name);
    if (!sinkpad)
    {
+   g_assert(sinkpad);
       return;
    }
-   g_assert(sinkpad);
 
    bin_src_pad = gst_pad_get_peer(sinkpad);
    g_assert(bin_src_pad);
@@ -1058,8 +1092,6 @@ static gboolean add_session(GHashTable *args)
       guint send_ssrc = 0;
       gchar *cname = NULL;
 
-      pending_session_info = g_new0 (PendingSessionInfo, 1);
-
       _owr_media_session_set_on_send_source(OWR_MEDIA_SESSION(session),
                                             g_cclosure_new_object_swap(G_CALLBACK(on_new_send_source), G_OBJECT(transport_agent)));
 
@@ -1150,6 +1182,61 @@ static gboolean add_session(GHashTable *args)
 
    g_warn_if_fail(state_change_status != GST_STATE_CHANGE_FAILURE);
 
+  end:
+   g_object_unref(session);
+   g_object_unref(transport_agent);
+   g_hash_table_unref(args);
+   return FALSE;
+}
+
+static gboolean remove_session(GHashTable *args)
+{
+   OwrTransportAgent *transport_agent;
+   OwrTransportAgentPrivate *priv;
+   OwrSession *session;
+   guint stream_id;
+
+   g_return_val_if_fail(args, FALSE);
+
+   transport_agent = g_hash_table_lookup(args, "transport_agent");
+   session = OWR_SESSION(g_hash_table_lookup(args, "session"));
+
+   g_return_val_if_fail(transport_agent, FALSE);
+   g_return_val_if_fail(session, FALSE);
+
+   priv = transport_agent->priv;
+
+   g_mutex_lock(&priv->sessions_lock);
+   if (!g_hash_table_find(priv->sessions, (GHRFunc)is_same_session, session)) {
+      g_warning("session does not exist. Action aborted.");
+      g_mutex_unlock(&priv->sessions_lock);
+      goto end;
+   }
+   g_mutex_unlock(&priv->sessions_lock);
+
+   stream_id = get_stream_id(transport_agent, session);
+
+   nice_agent_remove_stream(priv->nice_agent, stream_id);
+
+   g_mutex_lock(&priv->sessions_lock);
+   
+   g_hash_table_remove(priv->sessions, GUINT_TO_POINTER(stream_id));
+
+   g_mutex_unlock(&priv->sessions_lock);
+
+//   update_helper_servers(transport_agent, stream_id);
+//   nice_agent_forget_relays(priv->nice_agent, stream_id, NICE_COMPONENT_TYPE_RTP);
+//   nice_agent_forget_relays(priv->nice_agent, stream_id, NICE_COMPONENT_TYPE_RTCP);
+
+   
+   if (OWR_IS_MEDIA_SESSION(session)) {
+      remove_transport_bin_receive_elements(transport_agent, stream_id);
+      remove_transport_bin_send_elements(transport_agent, stream_id);
+   } else if (OWR_IS_DATA_SESSION(session)) {
+      remove_transport_bin_data_receive_elements(transport_agent, stream_id);
+      remove_transport_bin_data_send_elements(transport_agent, stream_id);
+   }
+   
   end:
    g_object_unref(session);
    g_object_unref(transport_agent);
@@ -1513,6 +1600,26 @@ static void link_rtpbin_to_send_output_bin(OwrTransportAgent *transport_agent, g
    }
 }
 
+static void remove_transport_bin_send_elements(OwrTransportAgent *transport_agent, guint stream_id)
+{
+   GstElement *send_output_bin;
+   gchar *bin_name;
+
+   g_return_if_fail(OWR_IS_TRANSPORT_AGENT(transport_agent));
+
+   bin_name = g_strdup_printf("send-output-bin-%u", stream_id);
+   send_output_bin = gst_bin_get_by_name(GST_BIN(transport_agent->priv->transport_bin), bin_name);
+   g_free(bin_name);
+
+   if (!gst_bin_remove(GST_BIN(transport_agent->priv->transport_bin), send_output_bin)) {
+      GST_ERROR("Failed to remove send-output-bin-%u from parent bin", stream_id);
+      return;
+   }
+
+   g_hash_table_remove(transport_agent->priv->send_bins, GINT_TO_POINTER(stream_id));
+}
+
+
 static void prepare_transport_bin_send_elements(OwrTransportAgent *transport_agent,
                                                 guint stream_id, gboolean rtcp_mux, PendingSessionInfo *pending_session_info)
 {
@@ -1600,6 +1707,24 @@ static GstPadProbeReturn nice_src_pad_block(GstPad *pad, GstPadProbeInfo *info, 
    OWR_UNUSED(data);
 
    return GST_PAD_PROBE_OK;
+}
+
+static void remove_transport_bin_receive_elements(OwrTransportAgent *transport_agent,
+                                                  guint stream_id)
+{
+   gchar *bin_name;
+   GstElement *receive_input_bin;
+
+   g_return_if_fail(OWR_IS_TRANSPORT_AGENT(transport_agent));
+
+   bin_name = g_strdup_printf("receive-input-bin-%u", stream_id);
+   receive_input_bin = gst_bin_get_by_name(GST_BIN(transport_agent->priv->transport_bin), bin_name);
+   g_free(bin_name);
+
+   if (!gst_bin_add(GST_BIN(transport_agent->priv->transport_bin), receive_input_bin)) {
+      GST_ERROR("Failed to add receive-input-bin-%u to parent bin", stream_id);
+      return;
+   }
 }
 
 static void prepare_transport_bin_receive_elements(OwrTransportAgent *transport_agent,
@@ -1723,6 +1848,28 @@ static void prepare_transport_bin_receive_elements(OwrTransportAgent *transport_
    gst_object_unref(rtp_sink_pad);
 }
 
+static void remove_transport_bin_data_receive_elements(OwrTransportAgent *transport_agent,
+                                                        guint stream_id)
+{
+   OwrTransportAgentPrivate *priv;
+   GstElement *receive_input_bin;
+   gchar *name;
+
+   g_return_if_fail(OWR_IS_TRANSPORT_AGENT(transport_agent));
+   priv = transport_agent->priv;
+
+   name = g_strdup_printf("receive-input-bin-%u", stream_id);
+   receive_input_bin = gst_bin_get_by_name(GST_BIN(priv->transport_bin), name);
+   g_free(name);
+
+   if (!gst_bin_remove(GST_BIN(priv->transport_bin), receive_input_bin)) {
+      GST_ERROR("Failed to add receive-input-bin-%u to parent bin", stream_id);
+      return;
+   }
+
+   g_hash_table_remove(priv->sessions, GUINT_TO_POINTER(stream_id));
+   
+}
 
 static void prepare_transport_bin_data_receive_elements(OwrTransportAgent *transport_agent,
                                                         guint stream_id)
@@ -1772,6 +1919,28 @@ static void prepare_transport_bin_data_receive_elements(OwrTransportAgent *trans
    sync_ok &= gst_element_sync_state_with_parent(dtls_srtp_bin);
    sync_ok &= gst_element_sync_state_with_parent(nice_element);
    g_warn_if_fail(sync_ok);
+}
+
+static void remove_transport_bin_data_send_elements(OwrTransportAgent *transport_agent,
+                                                     guint stream_id)
+{
+   OwrTransportAgentPrivate *priv;
+   GstElement *send_output_bin;
+   gchar *name;
+   
+   g_return_if_fail(OWR_IS_TRANSPORT_AGENT(transport_agent));
+   priv = transport_agent->priv;
+
+   name = g_strdup_printf("send-output-bin-%u", stream_id);
+   send_output_bin = gst_bin_get_by_name(GST_BIN(priv->transport_bin), name);
+   g_free(name);
+
+   if (!gst_bin_remove(GST_BIN(transport_agent->priv->transport_bin), send_output_bin)) {
+      GST_ERROR("Failed to add send-output-bin-%u to parent bin", stream_id);
+      return;
+   }
+
+   g_hash_table_remove(priv->sessions, GUINT_TO_POINTER(stream_id));
 }
 
 static void prepare_transport_bin_data_send_elements(OwrTransportAgent *transport_agent,
@@ -1987,6 +2156,15 @@ static gboolean emit_ice_state_changed(GHashTable *args)
    g_object_unref(session);
 
    return FALSE;
+}
+
+static void on_streams_removed(NiceAgent *nice_agent, guint *stream_ids,
+			OwrTransportAgent *transport_agent)
+{
+   g_return_if_fail(nice_agent);
+   g_return_if_fail(OWR_IS_TRANSPORT_AGENT(transport_agent));
+    (void)stream_ids;
+   g_print("======================================= streams removed fired\n");
 }
 
 static void on_component_state_changed(NiceAgent *nice_agent, guint stream_id,
