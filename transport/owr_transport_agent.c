@@ -965,37 +965,40 @@ static void remove_existing_send_source_and_payload(OwrTransportAgent *transport
       pad_name = g_strdup_printf("audio_sink_%u_%u", codec_type, stream_id);
    sinkpad = gst_element_get_static_pad(transport_agent->priv->transport_bin, pad_name);
    g_free(pad_name);
-   if (!sinkpad)
+
+   if (sinkpad)
    {
-   g_assert(sinkpad);
-      return;
+      bin_src_pad = gst_pad_get_peer(sinkpad);
+      g_assert(bin_src_pad);
+      source_bin = GST_ELEMENT(gst_pad_get_parent(bin_src_pad));
+      g_assert(source_bin);
+
+      /* Shutting down will flush immediately */
+      _owr_media_source_release_source(media_source, source_bin);
+      gst_element_set_state(source_bin, GST_STATE_NULL);
+      gst_bin_remove(GST_BIN(transport_agent->priv->pipeline), source_bin);
+      gst_object_unref(bin_src_pad);
+      gst_object_unref(source_bin);
    }
-
-   bin_src_pad = gst_pad_get_peer(sinkpad);
-   g_assert(bin_src_pad);
-   source_bin = GST_ELEMENT(gst_pad_get_parent(bin_src_pad));
-   g_assert(source_bin);
-
-   /* Shutting down will flush immediately */
-   _owr_media_source_release_source(media_source, source_bin);
-   gst_element_set_state(source_bin, GST_STATE_NULL);
-   gst_bin_remove(GST_BIN(transport_agent->priv->pipeline), source_bin);
-   gst_object_unref(bin_src_pad);
-   gst_object_unref(source_bin);
 
    /* Now the payload bin */
    bin_name = g_strdup_printf("send-input-bin-%u", stream_id);
    send_input_bin = gst_bin_get_by_name(GST_BIN(transport_agent->priv->transport_bin), bin_name);
-   g_assert(send_input_bin);
    g_free(bin_name);
-   gst_element_set_state(send_input_bin, GST_STATE_NULL);
-   gst_bin_remove(GST_BIN(transport_agent->priv->transport_bin), send_input_bin);
-   gst_object_unref(send_input_bin);
+   if (send_input_bin)
+   {
+      gst_element_set_state(send_input_bin, GST_STATE_NULL);
+      gst_bin_remove(GST_BIN(transport_agent->priv->transport_bin), send_input_bin);
+      gst_object_unref(send_input_bin);
+   }
 
-   /* Remove the connecting ghostpad */
-   gst_pad_set_active(sinkpad, FALSE);
-   gst_element_remove_pad(transport_agent->priv->transport_bin, sinkpad);
-   gst_object_unref(sinkpad);
+   if (sinkpad)
+   {
+      /* Remove the connecting ghostpad */
+      gst_pad_set_active(sinkpad, FALSE);
+      gst_element_remove_pad(transport_agent->priv->transport_bin, sinkpad);
+      gst_object_unref(sinkpad);
+   }
 
    value = _owr_value_table_add(event_data, "end_time", G_TYPE_INT64);
    g_value_set_int64(value, g_get_monotonic_time());
@@ -1216,6 +1219,9 @@ static gboolean remove_session(GHashTable *args)
 
    stream_id = get_stream_id(transport_agent, session);
 
+   nice_agent_forget_relays(priv->nice_agent, stream_id, NICE_COMPONENT_TYPE_RTP);
+   nice_agent_forget_relays(priv->nice_agent, stream_id, NICE_COMPONENT_TYPE_RTCP);
+
    nice_agent_remove_stream(priv->nice_agent, stream_id);
 
    g_mutex_lock(&priv->sessions_lock);
@@ -1223,10 +1229,6 @@ static gboolean remove_session(GHashTable *args)
    g_hash_table_remove(priv->sessions, GUINT_TO_POINTER(stream_id));
 
    g_mutex_unlock(&priv->sessions_lock);
-
-//   update_helper_servers(transport_agent, stream_id);
-//   nice_agent_forget_relays(priv->nice_agent, stream_id, NICE_COMPONENT_TYPE_RTP);
-//   nice_agent_forget_relays(priv->nice_agent, stream_id, NICE_COMPONENT_TYPE_RTCP);
 
    
    if (OWR_IS_MEDIA_SESSION(session)) {
@@ -1721,8 +1723,8 @@ static void remove_transport_bin_receive_elements(OwrTransportAgent *transport_a
    receive_input_bin = gst_bin_get_by_name(GST_BIN(transport_agent->priv->transport_bin), bin_name);
    g_free(bin_name);
 
-   if (!gst_bin_add(GST_BIN(transport_agent->priv->transport_bin), receive_input_bin)) {
-      GST_ERROR("Failed to add receive-input-bin-%u to parent bin", stream_id);
+   if (!gst_bin_remove(GST_BIN(transport_agent->priv->transport_bin), receive_input_bin)) {
+      GST_ERROR("Failed to remove receive-input-bin-%u to parent bin", stream_id);
       return;
    }
 }
