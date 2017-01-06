@@ -864,11 +864,7 @@ static void handle_new_send_source(OwrTransportAgent *transport_agent,
    stream_id = get_stream_id(transport_agent, OWR_SESSION(media_session));
    g_return_if_fail(stream_id);
 
-   GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_pipeline_before");
-
    gst_bin_add(GST_BIN(transport_agent->priv->pipeline), src);
-
-   GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_pipeline_added");
 
    if (!link_source_to_transport_bin(srcpad, transport_agent->priv->pipeline, transport_bin, media_type, codec_type, stream_id)) {
       gchar *name = "";
@@ -877,9 +873,9 @@ static void handle_new_send_source(OwrTransportAgent *transport_agent,
    }
    gst_object_unref(srcpad);
 
-   GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_pipeline_linked");
-
    gst_element_sync_state_with_parent(src);
+
+   GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "owr_pipeline_after_link");
 }
 
 static void maybe_handle_new_send_source_with_payload(OwrTransportAgent *transport_agent,
@@ -953,8 +949,7 @@ static void remove_existing_send_source_and_payload(OwrTransportAgent *transport
 
    stream_id = get_stream_id(transport_agent, OWR_SESSION(media_session));
 
-   GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_pipeline_removing");
-   GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->transport_bin), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_bin_removing");
+   GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "owr_pipeline_before_remove");
 
    /* Unlink the source bin */
    g_object_get(media_source, "media-type", &media_type, NULL);
@@ -1180,8 +1175,8 @@ static gboolean add_session(GHashTable *args)
       on_new_remote_candidate(transport_agent, TRUE, session);
 
    state_change_status = gst_element_set_state(transport_agent->priv->pipeline, GST_STATE_PLAYING);
-   GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "transport_agent_pipeline_playing");
 
+   GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(transport_agent->priv->pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "owr_pipeline_playing");
 
    g_warn_if_fail(state_change_status != GST_STATE_CHANGE_FAILURE);
 
@@ -2524,8 +2519,6 @@ static void handle_new_send_payload(OwrTransportAgent *transport_agent, OwrMedia
    g_free(name);
    g_warn_if_fail(gst_pad_link(ghost_src_pad, rtp_sink_pad) == GST_PAD_LINK_OK);
    gst_object_unref(rtp_sink_pad);
-
-   GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(send_input_bin), GST_DEBUG_GRAPH_SHOW_ALL, "send-input-bin");
 
    g_object_unref(media_source);
 }
