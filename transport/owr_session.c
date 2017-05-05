@@ -387,7 +387,7 @@ static void schedule_add_remote_candidate(OwrSession *session, OwrCandidate *can
         return;
     }
 
-    args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(session));
+    args = g_hash_table_new(g_str_hash, g_str_equal);
     g_hash_table_insert(args, "session", session);
     g_hash_table_insert(args, "candidate", candidate);
     g_hash_table_insert(args, "forced", GINT_TO_POINTER(f));
@@ -442,7 +442,7 @@ void owr_session_force_candidate_pair(OwrSession *session, OwrComponentType ctyp
     g_return_if_fail(OWR_IS_CANDIDATE(local_candidate));
     g_return_if_fail(OWR_IS_CANDIDATE(remote_candidate));
 
-    args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(session));
+    args = g_hash_table_new(g_str_hash, g_str_equal);
     g_hash_table_insert(args, "session", session);
     g_hash_table_insert(args, "component-type", GUINT_TO_POINTER(ctype));
     g_hash_table_insert(args, "local-candidate", local_candidate);

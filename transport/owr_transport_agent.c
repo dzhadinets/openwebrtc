@@ -286,6 +286,8 @@ static void maybe_close_data_channel(OwrTransportAgent *transport_agent, DataCha
 static gboolean on_payload_adaptation_request(GstElement *screamqueue, guint pt,
                                               OwrMediaSession *media_session);
 
+
+
 static void owr_transport_agent_finalize(GObject *object)
 {
    OwrTransportAgent *transport_agent = NULL;
@@ -648,7 +650,7 @@ void owr_transport_agent_add_session(OwrTransportAgent *agent, OwrSession *sessi
    g_return_if_fail(agent);
    g_return_if_fail(OWR_IS_MEDIA_SESSION(session) || OWR_IS_DATA_SESSION(session));
 
-   args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(agent));
+   args = g_hash_table_new(g_str_hash, g_str_equal);
    g_hash_table_insert(args, "transport_agent", agent);
    g_hash_table_insert(args, "session", session);
 
@@ -670,7 +672,7 @@ void owr_transport_agent_remove_session(OwrTransportAgent *agent, OwrSession *se
    g_return_if_fail(agent);
    g_return_if_fail(OWR_IS_MEDIA_SESSION(session) || OWR_IS_DATA_SESSION(session));
 
-   args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(agent));
+   args = g_hash_table_new(g_str_hash, g_str_equal);
    g_hash_table_insert(args, "transport_agent", agent);
    g_hash_table_insert(args, "session", session);
 
@@ -1052,7 +1054,7 @@ static gboolean add_session(GHashTable *args)
 
    transport_agent = g_hash_table_lookup(args, "transport_agent");
    session = OWR_SESSION(g_hash_table_lookup(args, "session"));
-
+   
    g_return_val_if_fail(transport_agent, FALSE);
    g_return_val_if_fail(session, FALSE);
 
@@ -1181,9 +1183,8 @@ static gboolean add_session(GHashTable *args)
    g_warn_if_fail(state_change_status != GST_STATE_CHANGE_FAILURE);
 
   end:
-   g_object_unref(session);
    g_object_unref(transport_agent);
-   g_hash_table_unref(args);
+   g_hash_table_unref(args);  
    return FALSE;
 }
 
@@ -1233,11 +1234,10 @@ static gboolean remove_session(GHashTable *args)
       remove_transport_bin_data_receive_elements(transport_agent, stream_id);
       remove_transport_bin_data_send_elements(transport_agent, stream_id);
    }
-   
-  end:
-   g_object_unref(session);
+      
+  end:    
    g_object_unref(transport_agent);
-   g_hash_table_unref(args);
+   g_hash_table_unref(args);      
    return FALSE;
 }
 
@@ -1481,8 +1481,7 @@ static void on_bitrate_change(GstElement *scream_queue, guint bitrate, guint ssr
 
    g_return_if_fail(session);
 
-   args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(session));
-
+   args = g_hash_table_new(g_str_hash, g_str_equal);
    g_hash_table_insert(args, "session", g_object_ref(session));
    g_hash_table_insert(args, "bitrate", GUINT_TO_POINTER(bitrate));
 
@@ -1591,10 +1590,10 @@ static void link_rtpbin_to_send_output_bin(OwrTransportAgent *transport_agent, g
 
       g_free(rtpbin_pad_name);
       g_free(dtls_srtp_pad_name);
-      g_object_unref(media_session);
 
       send_bin_info->linked_rtcp = TRUE;
    }
+   g_object_unref(media_session);
 }
 
 static void remove_transport_bin_send_elements(OwrTransportAgent *transport_agent, guint stream_id)
@@ -2065,7 +2064,7 @@ static void on_new_candidate(NiceAgent *nice_agent, NiceCandidate *nice_candidat
    g_return_if_fail(nice_candidate);
 
    g_object_ref(transport_agent);
-   args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(transport_agent));
+   args = g_hash_table_new(g_str_hash, g_str_equal);
    g_hash_table_insert(args, "transport_agent", transport_agent);
    g_hash_table_insert(args, "nice_candidate", nice_candidate_copy(nice_candidate));
 
@@ -2127,7 +2126,7 @@ static void on_candidate_gathering_done(NiceAgent *nice_agent, guint stream_id, 
    session = get_session(transport_agent, stream_id);
    g_return_if_fail(OWR_IS_SESSION(session));
 
-   args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(session));
+   args = g_hash_table_new(g_str_hash, g_str_equal);
    g_hash_table_insert(args, "transport-agent", transport_agent);
    g_hash_table_insert(args, "session", session);
 
@@ -2156,7 +2155,7 @@ static gboolean emit_ice_state_changed(GHashTable *args)
 }
 
 static void on_streams_removed(NiceAgent *nice_agent, guint *stream_ids,
-			OwrTransportAgent *transport_agent)
+                              OwrTransportAgent *transport_agent)
 {
    g_return_if_fail(nice_agent);
    g_return_if_fail(OWR_IS_TRANSPORT_AGENT(transport_agent));
@@ -2176,7 +2175,7 @@ static void on_component_state_changed(NiceAgent *nice_agent, guint stream_id,
    session = get_session(transport_agent, stream_id);
    g_return_if_fail(OWR_IS_SESSION(session));
 
-   args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(session));
+   args = g_hash_table_new(g_str_hash, g_str_equal);
    g_hash_table_insert(args, "session", session);
    g_hash_table_insert(args, "session-id", GUINT_TO_POINTER(stream_id));
    g_hash_table_insert(args, "component-type", GUINT_TO_POINTER(component_id));
@@ -2191,7 +2190,6 @@ static void on_new_selected_pair(NiceAgent *nice_agent,
                                  NiceCandidate *lcandidate, NiceCandidate *rcandidate,
                                  OwrTransportAgent *transport_agent)
 {
-   OwrSession *session;
    PendingSessionInfo *pending_session_info;
 
    OWR_UNUSED(nice_agent);
@@ -2199,9 +2197,6 @@ static void on_new_selected_pair(NiceAgent *nice_agent,
    OWR_UNUSED(rcandidate);
 
    g_return_if_fail(OWR_IS_TRANSPORT_AGENT(transport_agent));
-
-   session = get_session(transport_agent, stream_id);
-   g_return_if_fail(OWR_IS_SESSION(session));
 
    g_mutex_lock(&transport_agent->priv->sessions_lock);
    pending_session_info = g_hash_table_lookup(transport_agent->priv->pending_sessions, GUINT_TO_POINTER(stream_id));
@@ -2634,7 +2629,7 @@ static void signal_incoming_source(OwrMediaType type, OwrTransportAgent *transpo
 
    g_return_if_fail(source);
 
-   args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(media_session));
+   args = g_hash_table_new(g_str_hash, g_str_equal);
    g_hash_table_insert(args, "media_session", media_session);
    g_hash_table_insert(args, "source", source);
 
@@ -3209,6 +3204,14 @@ static gboolean on_sending_rtcp(GObject *session, GstBuffer *buffer, gboolean ea
    g_return_val_if_fail(OWR_IS_TRANSPORT_AGENT(agent), do_not_suppress);
 
    media_session = OWR_MEDIA_SESSION(get_session(agent, session_id));
+   if (media_session == NULL)
+   {
+      /* already removed. 
+       * it will be better disconnect handler when session is removed, see
+       * static gboolean remove_session(GHashTable *args)
+       */
+      return do_not_suppress;
+   }
    g_return_val_if_fail(OWR_IS_MEDIA_SESSION(media_session), do_not_suppress);
    send_payload = _owr_media_session_get_send_payload(media_session);
    if (send_payload) {
@@ -3895,7 +3898,7 @@ static void handle_data_channel_open_request(OwrTransportAgent *transport_agent,
 
    data_session = OWR_DATA_SESSION(get_session(transport_agent, data_channel_info->session_id));
    g_object_ref(data_session);
-   args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(data_session));
+   args = g_hash_table_new(g_str_hash, g_str_equal);   
    g_hash_table_insert(args, "session", data_session);
    g_hash_table_insert(args, "ordered", GUINT_TO_POINTER(data_channel_info->ordered));
    g_hash_table_insert(args, "max_packet_life_time",
@@ -3999,13 +4002,12 @@ static void handle_data_channel_message(OwrTransportAgent *transport_agent, guin
       message[size] = '\0';
 
    g_object_ref(owr_data_channel);
-   args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(owr_data_channel));
+   args = g_hash_table_new(g_str_hash, g_str_equal);
    g_hash_table_insert(args, "data_channel", owr_data_channel);
    g_hash_table_insert(args, "is_binary", GUINT_TO_POINTER(is_binary));
    g_hash_table_insert(args, "message", message);
    g_hash_table_insert(args, "size", GUINT_TO_POINTER(size));
    _owr_schedule_with_hash_table((GSourceFunc)emit_incoming_data, args);
-
 
   end:
    return;

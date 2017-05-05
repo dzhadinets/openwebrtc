@@ -228,7 +228,7 @@ static void owr_media_session_finalize(GObject *object)
     g_mutex_clear(&priv->remote_source_lock);
 
     if (priv->send_source)
-        owr_media_session_set_send_source(media_session, NULL);
+       g_object_unref(priv->send_source);       /*owr_media_session_set_send_source(media_session, NULL);*/
 
     if (priv->send_payload)
         g_object_unref(priv->send_payload);
@@ -357,7 +357,7 @@ void owr_media_session_add_receive_payload(OwrMediaSession *media_session, OwrPa
     g_return_if_fail(media_session);
     g_return_if_fail(payload);
 
-    args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(media_session));
+    args = g_hash_table_new(g_str_hash, g_str_equal);
     g_hash_table_insert(args, "media_session", media_session);
     g_hash_table_insert(args, "payload", payload);
 
@@ -379,7 +379,7 @@ void owr_media_session_set_send_payload(OwrMediaSession *media_session, OwrPaylo
     g_return_if_fail(media_session);
     g_return_if_fail(!payload || OWR_IS_PAYLOAD(payload));
 
-    args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(media_session));
+    args = g_hash_table_new(g_str_hash, g_str_equal);
     g_hash_table_insert(args, "media_session", media_session);
     g_hash_table_insert(args, "payload", payload);
     g_object_ref(media_session);
@@ -401,7 +401,7 @@ void owr_media_session_set_send_source(OwrMediaSession *media_session, OwrMediaS
     g_return_if_fail(OWR_IS_MEDIA_SESSION(media_session));
     g_return_if_fail(!source || OWR_IS_MEDIA_SOURCE(source));
 
-    args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(media_session));
+    args = g_hash_table_new(g_str_hash, g_str_equal);
     g_hash_table_insert(args, "media_session", media_session);
     g_hash_table_insert(args, "source", source);
     g_object_ref(media_session);
@@ -495,6 +495,7 @@ static gboolean set_send_payload(GHashTable *args)
         g_closure_invoke(priv->on_send_payload, NULL, 3, (const GValue *)&params, NULL);
         g_value_unset(&params[0]);
         g_value_unset(&params[1]);
+        g_value_unset(&params[2]);
     }
 
     g_object_unref(media_session);
