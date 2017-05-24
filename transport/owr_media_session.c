@@ -208,7 +208,7 @@ static void owr_media_session_finalize(GObject *object)
 {
     OwrMediaSession *media_session = OWR_MEDIA_SESSION(object);
     OwrMediaSessionPrivate *priv = media_session->priv;
-
+    
     _owr_media_session_clear_closures(media_session);
 
     if (priv->incoming_srtp_key)
@@ -228,7 +228,7 @@ static void owr_media_session_finalize(GObject *object)
     g_mutex_clear(&priv->remote_source_lock);
 
     if (priv->send_source)
-       g_object_unref(priv->send_source);       /*owr_media_session_set_send_source(media_session, NULL);*/
+       g_object_unref(priv->send_source);
 
     if (priv->send_payload)
         g_object_unref(priv->send_payload);
@@ -411,7 +411,6 @@ void owr_media_session_set_send_source(OwrMediaSession *media_session, OwrMediaS
     _owr_schedule_with_hash_table((GSourceFunc)set_send_source, args);
 }
 
-
 /* Internal functions */
 
 static gboolean add_receive_payload(GHashTable *args)
@@ -464,7 +463,7 @@ static gboolean set_send_payload(GHashTable *args)
     OwrMediaSession *media_session;
     OwrMediaSessionPrivate *priv;
     OwrPayload *payload, *old_payload;
-    GValue params[3] = { G_VALUE_INIT };
+    GValue params[3] = { G_VALUE_INIT, G_VALUE_INIT, G_VALUE_INIT };
 
     g_return_val_if_fail(args, FALSE);
 
@@ -477,12 +476,18 @@ static gboolean set_send_payload(GHashTable *args)
     priv = media_session->priv;
 
     g_rw_lock_writer_lock(&priv->rw_lock);
-    old_payload = priv->send_payload;
+    /*old_payload = priv->send_payload;
     if (old_payload)
         g_object_ref(old_payload);
     if (priv->send_payload)
         g_object_unref(priv->send_payload);
+    priv->send_payload = payload;*/
+    old_payload = priv->send_payload;
     priv->send_payload = payload;
+    if (priv->send_payload)
+       g_object_ref(priv->send_payload);
+    if (old_payload)
+       g_object_unref(old_payload);
     g_rw_lock_writer_unlock(&priv->rw_lock);
 
     if (priv->on_send_payload) {
@@ -508,7 +513,7 @@ static gboolean set_send_source(GHashTable *args)
     OwrMediaSession *media_session;
     OwrMediaSessionPrivate *priv;
     OwrMediaSource *source, *old_source;
-    GValue params[3] = { G_VALUE_INIT, };
+    GValue params[3] = { G_VALUE_INIT, G_VALUE_INIT, G_VALUE_INIT };
 
     g_return_val_if_fail(args, FALSE);
 
@@ -521,12 +526,18 @@ static gboolean set_send_source(GHashTable *args)
     priv = media_session->priv;
 
     g_rw_lock_writer_lock(&priv->rw_lock);
-    old_source = priv->send_source;
+    /*old_source = priv->send_source;
     if (old_source)
         g_object_ref(old_source);
     if (priv->send_source)
         g_object_unref(priv->send_source);
+    priv->send_source = source;*/
+    old_source = priv->send_source;
     priv->send_source = source;
+    if (priv->send_source)
+       g_object_ref(priv->send_source);
+    if (old_source)
+       g_object_unref(old_source);
     g_rw_lock_writer_unlock(&priv->rw_lock);
 
     if (priv->on_send_source) {
@@ -546,6 +557,38 @@ static gboolean set_send_source(GHashTable *args)
     g_hash_table_unref(args);
 
     return FALSE;
+}
+
+void owr_media_session_unset_send_source(OwrMediaSession *media_session)
+{
+   OwrMediaSessionPrivate *priv;
+   OwrMediaSource *old_source;
+   GValue params[3] = { G_VALUE_INIT, G_VALUE_INIT, G_VALUE_INIT };
+   
+   g_return_if_fail(media_session);
+   
+   priv = media_session->priv;
+   
+   g_rw_lock_writer_lock(&priv->rw_lock);
+   old_source = priv->send_source;
+   priv->send_source = NULL;
+   g_rw_lock_writer_unlock(&priv->rw_lock);
+   
+   if (priv->on_send_source) {
+      g_value_init(&params[0], OWR_TYPE_MEDIA_SESSION);
+      g_value_set_object(&params[0], media_session);
+      g_value_init(&params[1], OWR_TYPE_MEDIA_SOURCE);
+      g_value_set_object(&params[1], old_source);
+      g_value_init(&params[2], OWR_TYPE_MEDIA_SOURCE);
+      g_value_set_object(&params[2], NULL);
+      g_closure_invoke(priv->on_send_source, NULL, 3, (const GValue *)&params, NULL);
+      g_value_unset(&params[0]);
+      g_value_unset(&params[1]);
+      g_value_unset(&params[2]);
+   }
+   
+   if (old_source)
+      g_object_unref(old_source);   
 }
 
 

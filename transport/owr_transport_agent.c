@@ -198,6 +198,7 @@ static void add_helper_server_info(GResolver *resolver, GAsyncResult *result, GH
 static void update_helper_servers(OwrTransportAgent *transport_agent, guint stream_id);
 static gboolean add_session(GHashTable *args);
 static gboolean remove_session(GHashTable *args);
+static void remove_session2(OwrTransportAgent *transport_agent, OwrSession *session);
 static guint get_stream_id(OwrTransportAgent *transport_agent, OwrSession *session);
 static OwrSession * get_session(OwrTransportAgent *transport_agent, guint stream_id);
 static void prepare_transport_bin_send_elements(OwrTransportAgent *transport_agent, guint stream_id, gboolean rtcp_mux, PendingSessionInfo *pending_session_info);
@@ -296,9 +297,16 @@ static void owr_transport_agent_finalize(GObject *object)
    GList *sessions_list = NULL, *item = NULL;
 
    g_return_if_fail(_owr_is_initialized());
-
+   
    transport_agent = OWR_TRANSPORT_AGENT(object);
    priv = transport_agent->priv;
+   
+   sessions_list = g_hash_table_get_values(priv->sessions);
+   for (item = sessions_list; item; item = item->next) {
+      session = item->data;
+      remove_session2(transport_agent, session);
+      g_object_unref(session);
+   }   
 
    gst_element_set_state(priv->pipeline, GST_STATE_NULL);
    gst_object_unref(priv->pipeline);
@@ -419,9 +427,9 @@ static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer user_data)
 
          g_printerr("==== %s message stop ====\n", message_type);
 
-         if (!is_warning) {
+         /*if (!is_warning) {
             OWR_POST_ERROR(transport_agent, PROCESSING_ERROR, NULL);
-         }
+         }*/
 
          g_error_free(error);
          g_free(debug);
@@ -885,8 +893,8 @@ static void maybe_handle_new_send_source_with_payload(OwrTransportAgent *transpo
 {
    OwrPayload *payload = NULL;
    OwrMediaSource *media_source = NULL;
-   GHashTable *event_data;
-   GValue *value;
+   /*GHashTable *event_data;
+   GValue *value;*/
    guint stream_id;
    gboolean pending;
 
@@ -904,16 +912,16 @@ static void maybe_handle_new_send_source_with_payload(OwrTransportAgent *transpo
        (payload = _owr_media_session_get_send_payload(media_session)) &&
        (media_source = _owr_media_session_get_send_source(media_session))) {
 
-      event_data = _owr_value_table_new();
+      /*event_data = _owr_value_table_new();
       value = _owr_value_table_add(event_data, "start_time", G_TYPE_INT64);
-      g_value_set_int64(value, g_get_monotonic_time());
+      g_value_set_int64(value, g_get_monotonic_time());*/
 
       handle_new_send_payload(transport_agent, media_session, payload);
       handle_new_send_source(transport_agent, media_session, media_source, payload);
 
-      value = _owr_value_table_add(event_data, "end_time", G_TYPE_INT64);
+      /*value = _owr_value_table_add(event_data, "end_time", G_TYPE_INT64);
       g_value_set_int64(value, g_get_monotonic_time());
-      OWR_POST_STATS(media_session, SEND_PIPELINE_ADDED, event_data);
+      OWR_POST_STATS(media_session, SEND_PIPELINE_ADDED, event_data);*/
    }
 
    if (payload)
@@ -930,16 +938,16 @@ static void remove_existing_send_source_and_payload(OwrTransportAgent *transport
    GstPad *bin_src_pad, *sinkpad;
    GstElement *send_input_bin, *source_bin;
    OwrMediaType media_type = OWR_MEDIA_TYPE_UNKNOWN;
-   GHashTable *event_data;
-   GValue *value;
+   /*GHashTable *event_data;
+   GValue *value;*/
    OwrPayload *send_payload;
    OwrCodecType codec_type = OWR_CODEC_TYPE_NONE;
 
    g_assert(media_source);
 
-   event_data = _owr_value_table_new();
+   /*event_data = _owr_value_table_new();
    value = _owr_value_table_add(event_data, "start_time", G_TYPE_INT64);
-   g_value_set_int64(value, g_get_monotonic_time());
+   g_value_set_int64(value, g_get_monotonic_time());*/
 
    send_payload = _owr_media_session_get_send_payload(media_session);
    if (send_payload) {
@@ -997,9 +1005,9 @@ static void remove_existing_send_source_and_payload(OwrTransportAgent *transport
       gst_object_unref(sinkpad);
    }
 
-   value = _owr_value_table_add(event_data, "end_time", G_TYPE_INT64);
+   /*value = _owr_value_table_add(event_data, "end_time", G_TYPE_INT64);
    g_value_set_int64(value, g_get_monotonic_time());
-   OWR_POST_STATS(media_session, SEND_PIPELINE_REMOVED, event_data);
+   OWR_POST_STATS(media_session, SEND_PIPELINE_REMOVED, event_data);*/
 }
 
 static void on_new_send_payload(OwrTransportAgent *transport_agent,
@@ -1239,6 +1247,46 @@ static gboolean remove_session(GHashTable *args)
    g_object_unref(transport_agent);
    g_hash_table_unref(args);      
    return FALSE;
+}
+
+static void remove_session2(OwrTransportAgent *transport_agent, OwrSession *session)
+{
+   OwrTransportAgentPrivate *priv;
+   guint stream_id;
+    
+   g_return_if_fail(transport_agent);
+   g_return_if_fail(session);
+   
+   priv = transport_agent->priv;
+   
+   g_mutex_lock(&priv->sessions_lock);
+   if (!g_hash_table_find(priv->sessions, (GHRFunc)is_same_session, session)) {
+      g_warning("session does not exist. Action aborted.");
+      g_mutex_unlock(&priv->sessions_lock);
+      return ;
+   }
+   g_mutex_unlock(&priv->sessions_lock);
+   
+   stream_id = get_stream_id(transport_agent, session);
+   
+   nice_agent_forget_relays(priv->nice_agent, stream_id, NICE_COMPONENT_TYPE_RTP);
+   nice_agent_forget_relays(priv->nice_agent, stream_id, NICE_COMPONENT_TYPE_RTCP);   
+   nice_agent_remove_stream(priv->nice_agent, stream_id);
+   
+   g_mutex_lock(&priv->sessions_lock);
+   
+   g_hash_table_remove(priv->sessions, GUINT_TO_POINTER(stream_id));   
+   
+   g_mutex_unlock(&priv->sessions_lock);
+   
+   
+   if (OWR_IS_MEDIA_SESSION(session)) {
+      remove_transport_bin_receive_elements(transport_agent, stream_id);
+      remove_transport_bin_send_elements(transport_agent, stream_id);
+   } else if (OWR_IS_DATA_SESSION(session)) {
+      remove_transport_bin_data_receive_elements(transport_agent, stream_id);
+      remove_transport_bin_data_send_elements(transport_agent, stream_id);
+   }
 }
 
 static GstElement *add_nice_element(OwrTransportAgent *transport_agent, guint stream_id,
@@ -2715,6 +2763,7 @@ typedef struct {
 
 static void session_data_free(gpointer session_data)
 {
+   g_object_unref(((SessionData*)session_data)->session);
    g_slice_free(SessionData, session_data);
 }
 
@@ -3553,6 +3602,7 @@ static void sctpdec_pad_removed(GstElement *sctpdec, GstPad *sctpdec_srcpad,
       data_channel = _owr_data_session_get_datachannel(data_session,
                                                        data_channel_info->id);
       g_assert(data_channel);
+      g_object_unref(data_session);
    }
    g_rw_lock_writer_unlock(&priv->data_channels_rw_mutex);
 
@@ -3621,6 +3671,7 @@ static void on_sctp_association_established(GstElement *sctpenc, gboolean establ
       }
 
       g_list_free(data_channels);
+      g_object_unref(data_session);
    } else
       g_log(G_LOG_DOMAIN, G_LOG_LEVEL_INFO, "An SCTP association has been terminated");
 }
@@ -3768,6 +3819,7 @@ static gboolean create_datachannel_appsrc(OwrTransportAgent *transport_agent,
 
    result = TRUE;
   end:
+   g_object_unref(data_session);
    gst_object_unref(sctpenc);
    gst_object_unref(send_output_bin);
    return result;
@@ -3897,7 +3949,7 @@ static void handle_data_channel_open_request(OwrTransportAgent *transport_agent,
          data_channel_info->label);
 
    data_session = OWR_DATA_SESSION(get_session(transport_agent, data_channel_info->session_id));
-   g_object_ref(data_session);
+   /* g_object_ref(data_session); */
    args = g_hash_table_new(g_str_hash, g_str_equal);   
    g_hash_table_insert(args, "session", data_session);
    g_hash_table_insert(args, "ordered", GUINT_TO_POINTER(data_channel_info->ordered));
@@ -3962,6 +4014,7 @@ static void handle_data_channel_ack(OwrTransportAgent *transport_agent, guint8 *
    data_channel = _owr_data_session_get_datachannel(data_session, data_channel_info->id);
    g_assert(OWR_IS_DATA_CHANNEL(data_channel));
    data_channel_info->state = OWR_DATA_CHANNEL_STATE_OPEN;
+   g_object_unref(data_session);
    g_rw_lock_writer_unlock(&data_channel_info->rw_mutex);
 
    _owr_data_channel_set_ready_state(data_channel, OWR_DATA_CHANNEL_READY_STATE_OPEN);
@@ -3985,6 +4038,7 @@ static void handle_data_channel_message(OwrTransportAgent *transport_agent, guin
 
    g_rw_lock_reader_lock(&data_channel_info->rw_mutex);
    if (data_channel_info->state != OWR_DATA_CHANNEL_STATE_OPEN) {
+      g_rw_lock_reader_unlock(&data_channel_info->rw_mutex);      
       /* This should never happen */
       g_critical("Received message before datachannel was established.");
       goto end;
@@ -3993,6 +4047,7 @@ static void handle_data_channel_message(OwrTransportAgent *transport_agent, guin
    data_session = OWR_DATA_SESSION(get_session(transport_agent, data_channel_info->session_id));
    owr_data_channel = _owr_data_session_get_datachannel(data_session, data_channel_info->id);
    g_assert(owr_data_channel);
+   g_object_unref(data_session);
    g_rw_lock_reader_unlock(&data_channel_info->rw_mutex);
 
    message = g_malloc(size + (is_binary ? 0 : 1));
@@ -4230,6 +4285,7 @@ static guint64 on_datachannel_request_bytes_sent(OwrTransportAgent *transport_ag
 
    data_session = OWR_DATA_SESSION(get_session(transport_agent, session_id));
    name = _owr_data_session_get_encoder_name(data_session);
+   g_object_unref(data_session);
    sctpenc = gst_bin_get_by_name(GST_BIN(send_output_bin), name);
    g_free(name);
    g_assert(sctpenc);
@@ -4256,9 +4312,15 @@ static void maybe_close_data_channel(OwrTransportAgent *transport_agent,
       data_session = OWR_DATA_SESSION(get_session(transport_agent,
                                                   data_channel_info->session_id));
       data_channel = _owr_data_session_get_datachannel(data_session, data_channel_info->id);
+      g_object_unref(data_session);
       _owr_data_channel_set_ready_state(data_channel, OWR_DATA_CHANNEL_READY_STATE_CLOSED);
+      /* steal doesn't invoke destroy functions, is it potential leak ? */
+      g_rw_lock_writer_lock(&priv->data_channels_rw_mutex);      
       g_hash_table_steal(priv->data_channels, GUINT_TO_POINTER(data_channel_info->id));
+      g_rw_lock_writer_unlock(&priv->data_channels_rw_mutex);
+      g_rw_lock_writer_unlock(&data_channel_info->rw_mutex);
       data_channel_free(data_channel_info);
+      return ;
    }
    g_rw_lock_writer_unlock(&data_channel_info->rw_mutex);
 }

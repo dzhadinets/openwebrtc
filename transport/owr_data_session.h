@@ -76,6 +76,7 @@ GType owr_data_session_get_type(void) G_GNUC_CONST;
 OwrDataSession * owr_data_session_new(gboolean dtls_client_mode);
 
 void owr_data_session_add_data_channel(OwrDataSession *data_session, OwrDataChannel *data_channel);
+void owr_data_session_remove_data_channel(OwrDataSession *data_session, OwrDataChannel *data_channel);
 
 G_END_DECLS
 

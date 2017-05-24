@@ -83,6 +83,8 @@ void owr_media_session_add_receive_payload(OwrMediaSession *media_session, OwrPa
 void owr_media_session_set_send_payload(OwrMediaSession *media_session, OwrPayload *payload);
 void owr_media_session_set_send_source(OwrMediaSession *media_session, OwrMediaSource *source);
 
+void owr_media_session_unset_send_source(OwrMediaSession *media_session);
+
 G_END_DECLS
 
 #endif /* __OWR_MEDIA_SESSION_H__ */

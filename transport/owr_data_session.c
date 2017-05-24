@@ -97,6 +97,7 @@ static guint data_session_signals[LAST_SIGNAL] = { 0 };
 static GParamSpec *obj_properties[N_PROPERTIES] = {NULL, };
 
 static gboolean add_data_channel(GHashTable *args);
+/*static gboolean remove_data_channel(GHashTable *args);*/
 static guint get_next_association_id(void);
 
 static void owr_data_session_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec)
@@ -224,13 +225,37 @@ void owr_data_session_add_data_channel(OwrDataSession *data_session, OwrDataChan
     g_return_if_fail(OWR_IS_DATA_SESSION(data_session));
     g_return_if_fail(OWR_IS_DATA_CHANNEL(data_channel));
 
-    args = _owr_create_schedule_table(OWR_MESSAGE_ORIGIN(data_session));
+    args = g_hash_table_new(g_str_hash, g_str_equal);
     g_hash_table_insert(args, "data_session", data_session);
     g_hash_table_insert(args, "data_channel", data_channel);
     g_object_ref(data_session);
     g_object_ref(data_channel);
     _owr_schedule_with_hash_table((GSourceFunc)add_data_channel, args);
 }
+
+/**
+ * owr_data_session_remove_data_channel:
+ * @data_session:
+ * @data_channel:
+ *
+ */
+/*void owr_data_session_remove_data_channel(OwrDataSession *data_session, OwrDataChannel *data_channel)
+{
+    GHashTable *args;
+
+    g_return_if_fail(OWR_IS_DATA_SESSION(data_session));
+    g_return_if_fail(OWR_IS_DATA_CHANNEL(data_channel));
+
+    args = g_hash_table_new(g_str_hash, g_str_equal);
+    g_hash_table_insert(args, "data_session", data_session);
+    g_hash_table_insert(args, "data_channel", data_channel);
+    g_object_ref(data_session);
+    g_object_ref(data_channel);
+    _owr_schedule_with_hash_table((GSourceFunc)remove_data_channel, args);
+}*/
+
+
+
 
 /* Internal functions */
 
@@ -274,6 +299,33 @@ end:
 
     return FALSE;
 }
+
+
+/*static gboolean remove_data_channel(GHashTable *args)
+{
+    OwrDataSessionPrivate *priv;
+    OwrDataSession *data_session;
+    OwrDataChannel *data_channel;
+    guint id;
+
+    data_session = g_hash_table_lookup(args, "data_session");
+    data_channel = g_hash_table_lookup(args, "data_channel");
+    priv = data_session->priv;
+
+    g_object_get(data_channel, "id", &id, NULL);
+    if (!g_hash_table_remove(priv->data_channels, GUINT_TO_POINTER(id))) {
+        g_warning("A datachannel with channel id %u does not exist. ", id);
+        goto end;
+    }
+
+end:
+    g_hash_table_unref(args);
+    g_object_unref(data_session);
+    g_object_unref(data_channel);
+
+    return FALSE;
+}*/
+
 
 static guint get_next_association_id(void)
 {
