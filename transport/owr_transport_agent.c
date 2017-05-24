@@ -426,6 +426,7 @@ static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer user_data)
          g_printerr("Debugging info: %s\n", (debug) ? debug : "none");
 
          g_printerr("==== %s message stop ====\n", message_type);
+         GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "owr_pipeline.dot");
 
          /*if (!is_warning) {
             OWR_POST_ERROR(transport_agent, PROCESSING_ERROR, NULL);
@@ -804,6 +805,12 @@ static void update_helper_servers(OwrTransportAgent *transport_agent, guint stre
                                       address, port, username, password, NICE_RELAY_TYPE_TURN_TCP);
             nice_agent_set_relay_info(priv->nice_agent, stream_id, NICE_COMPONENT_TYPE_RTCP,
                                       address, port, username, password, NICE_RELAY_TYPE_TURN_TCP);
+            break;
+        case OWR_HELPER_SERVER_TYPE_TURN_TLS:
+            nice_agent_set_relay_info(priv->nice_agent, stream_id, NICE_COMPONENT_TYPE_RTP,
+                                      address, port, username, password, NICE_RELAY_TYPE_TURN_TLS);
+            nice_agent_set_relay_info(priv->nice_agent, stream_id, NICE_COMPONENT_TYPE_RTCP,
+                                      address, port, username, password, NICE_RELAY_TYPE_TURN_TLS);
             break;
       }
    }
@@ -2118,6 +2125,7 @@ static void on_new_candidate(NiceAgent *nice_agent, NiceCandidate *nice_candidat
 
    _owr_schedule_with_hash_table((GSourceFunc)emit_new_candidate, args);
 
+   g_object_unref(transport_agent);
 }
 
 static gboolean emit_candidate_gathering_done(GHashTable *args)
@@ -2158,6 +2166,7 @@ static gboolean emit_candidate_gathering_done(GHashTable *args)
    }
 
    g_hash_table_destroy(args);
+   g_object_unref(transport_agent);
    g_object_unref(session);
 
    return FALSE;
@@ -4230,6 +4239,10 @@ static void on_datachannel_send(OwrTransportAgent *transport_agent, guint8 *data
    g_rw_lock_reader_lock(&priv->data_channels_rw_mutex);
    data_channel_info = g_hash_table_lookup(priv->data_channels, GUINT_TO_POINTER(id));
    g_rw_lock_reader_unlock(&priv->data_channels_rw_mutex);
+   if (!data_channel_info)
+   {
+     return;
+   }
    gstbuf = gst_buffer_new_wrapped(data, len);
 
    g_rw_lock_reader_lock(&data_channel_info->rw_mutex);
