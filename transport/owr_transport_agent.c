@@ -2124,8 +2124,6 @@ static void on_new_candidate(NiceAgent *nice_agent, NiceCandidate *nice_candidat
    g_hash_table_insert(args, "nice_candidate", nice_candidate_copy(nice_candidate));
 
    _owr_schedule_with_hash_table((GSourceFunc)emit_new_candidate, args);
-
-   g_object_unref(transport_agent);
 }
 
 static gboolean emit_candidate_gathering_done(GHashTable *args)
@@ -2180,6 +2178,7 @@ static void on_candidate_gathering_done(NiceAgent *nice_agent, guint stream_id, 
    g_return_if_fail(nice_agent);
    g_return_if_fail(OWR_IS_TRANSPORT_AGENT(transport_agent));
 
+   g_object_ref(transport_agent);   
    session = get_session(transport_agent, stream_id);
    g_return_if_fail(OWR_IS_SESSION(session));
 
